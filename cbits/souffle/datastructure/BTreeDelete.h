@@ -919,12 +919,6 @@ public:
         // the index of the element currently addressed within the referenced node
         field_index_type pos = 0;
 
-        using iterator_category = std::forward_iterator_tag;
-        using value_type = Key;
-        using difference_type = ptrdiff_t;
-        using pointer = value_type*;
-        using reference = value_type&;
-
         // default constructor -- creating an end-iterator
         iterator() : cur(nullptr) {}
 
