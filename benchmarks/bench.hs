@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# OPTIONS_GHC -Wno-missing-kind-signatures #-}
 module Main ( main ) where
 
 import Criterion.Main
@@ -21,19 +22,23 @@ data Benchmarks = Benchmarks
 
 data NumbersFact
   = NumbersFact Word32 Int32 Float
-  deriving (Generic, NFData)
+  deriving stock (Generic)
+  deriving anyclass (NFData)
 
 data StringsFact
   = StringsFact Word32 T.Text Int32 Float
-  deriving (Generic, NFData)
+  deriving stock (Generic)
+  deriving anyclass (NFData)
 
 newtype FromDatalogFact
   = FromDatalogFact Int32
-  deriving (Generic, NFData)
+  deriving stock (Generic)
+  deriving anyclass (NFData)
 
 data FromDatalogStringFact
   = FromDatalogStringFact Int32 T.Text
-  deriving (Generic, NFData)
+  deriving stock (Generic)
+  deriving anyclass (NFData)
 
 instance S.Program Benchmarks where
   type ProgramFacts Benchmarks =
