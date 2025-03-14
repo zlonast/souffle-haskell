@@ -11,3 +11,4 @@ cbits/*.o
 upload-docs.sh
 *.csv
 .direnv/
+.vscode

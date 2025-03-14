@@ -248,10 +248,16 @@ public:
     context createContext() {
         return context();
     }
-    class iterator : public std::iterator<std::forward_iterator_tag, Tuple<RamDomain, Arity>> {
+    class iterator {
         typename std::vector<Tuple<RamDomain, Arity>>::const_iterator it;
 
     public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = Tuple<RamDomain, Arity>;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
         iterator(const typename std::vector<t_tuple>::const_iterator& o) : it(o) {}
 
         const t_tuple operator*() {
@@ -329,12 +335,18 @@ struct t_eqrel {
     using t_tuple = Tuple<RamDomain, 2>;
     using t_ind = EquivalenceRelation<t_tuple>;
     t_ind ind;
-    class iterator_0 : public std::iterator<std::forward_iterator_tag, t_tuple> {
+    class iterator_0 {
         using nested_iterator = typename t_ind::iterator;
         nested_iterator nested;
         t_tuple value;
 
     public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = t_tuple;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
         iterator_0(const nested_iterator& iter) : nested(iter), value(*iter) {}
         iterator_0(const iterator_0& other) = default;
         iterator_0& operator=(const iterator_0& other) = default;
@@ -356,12 +368,18 @@ struct t_eqrel {
             return *this;
         }
     };
-    class iterator_1 : public std::iterator<std::forward_iterator_tag, t_tuple> {
+    class iterator_1 {
         using nested_iterator = typename t_ind::iterator;
         nested_iterator nested;
         t_tuple value;
 
     public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = t_tuple;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
         iterator_1(const nested_iterator& iter) : nested(iter), value(reorder(*iter)) {}
         iterator_1(const iterator_1& other) = default;
         iterator_1& operator=(const iterator_1& other) = default;
