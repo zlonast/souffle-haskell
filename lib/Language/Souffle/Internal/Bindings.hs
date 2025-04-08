@@ -1,4 +1,3 @@
-
 -- | This module provides C bindings exposed by the files in the cbits directory.
 --   This is an internal module, that is prone to have frequent changes,
 --   use at your own risk.
@@ -19,11 +18,13 @@ module Language.Souffle.Internal.Bindings
   , containsTuple
   ) where
 
-import Prelude hiding ( init )
-import Data.Kind (Type)
-import Foreign.C.String
-import Foreign.C.Types
-import Foreign.Ptr
+import           Data.Kind        (Type)
+
+import           Foreign.C.String (CString)
+import           Foreign.C.Types  (CBool (..), CSize (..))
+import           Foreign.Ptr      (FunPtr, Ptr)
+
+import           Prelude          hiding (init)
 
 
 -- | A void type, used for tagging a pointer that points to an embedded
@@ -123,7 +124,7 @@ foreign import ccall unsafe "souffle_relation" getRelation
 foreign import ccall unsafe "souffle_contains_tuple" containsTuple
   :: Ptr Relation -> Ptr ByteBuf -> IO CBool
 
-{-| Serializes many Datalog facts from Haskell to C++.
+{-| Serializes many `Datalog` facts from Haskell to C++.
 
     You need to check if the passed pointers are non-NULL before passing it
     to this function. Not doing so results in undefined behavior.

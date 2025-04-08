@@ -1,9 +1,3 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE FlexibleInstances, FlexibleContexts, TypeFamilies, DerivingVia #-}
-{-# LANGUAGE BangPatterns, RoleAnnotations, MultiParamTypeClasses #-}
-{-# LANGUAGE InstanceSigs, DataKinds, TypeApplications, TypeOperators #-}
-{-# LANGUAGE ConstraintKinds, PolyKinds, UndecidableInstances #-}
-
 -- | This module provides an implementation for the typeclasses defined in
 --   "Language.Souffle.Class".
 --   It makes use of the low level Souffle C++ API to offer a much more
@@ -30,37 +24,44 @@ module Language.Souffle.Compiled
   , runSouffle
   ) where
 
-import Prelude hiding ( init )
-import Control.Monad.State.Strict (StateT, MonadState (..), evalStateT, modify, gets)
-import Data.Foldable ( traverse_ )
-import Data.Functor.Identity
-import Data.Proxy
-import Data.Kind
-import qualified Data.Array as A
-import qualified Data.Array.IO as A
-import qualified Data.Array.Unsafe as A
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Unsafe as BSU
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
+import           Control.Concurrent               (MVar, modifyMVarMasked, modifyMVarMasked_, newMVar)
+import           Control.Monad                    (when)
+import           Control.Monad.IO.Class           (MonadIO (..))
+import           Control.Monad.State.Strict       (MonadState (..), StateT, evalStateT, gets, modify)
+
+import qualified Data.Array                       as A
+import qualified Data.Array.IO                    as A
+import qualified Data.Array.Unsafe                as A
+import qualified Data.ByteString                  as BS
+import qualified Data.ByteString.Unsafe           as BSU
+import           Data.Foldable                    (traverse_)
+import           Data.Functor.Identity            (Identity (..))
+import           Data.Int                         (Int32)
+import           Data.Kind                        (Constraint, Type)
+import           Data.Proxy                       (Proxy (..))
+import qualified Data.Text                        as T
+import qualified Data.Text.Encoding               as TE
 import qualified Data.Text.Internal.StrictBuilder as TB
-import qualified Data.Text.Lazy as TL
-import qualified Data.Vector as V
-import qualified Data.Vector.Mutable as MV
-import Data.Int
-import Data.Word
-import Foreign.ForeignPtr
-import Foreign.ForeignPtr.Unsafe
-import Foreign (copyBytes)
-import Foreign.Ptr
-import qualified Foreign.Storable as S
-import GHC.Generics
-import Language.Souffle.Class
-import qualified Language.Souffle.Internal as Internal
-import Language.Souffle.Marshal
-import Control.Concurrent
-import Control.Monad (when)
-import Control.Monad.IO.Class (MonadIO (..))
+import qualified Data.Text.Lazy                   as TL
+import qualified Data.Vector                      as V
+import qualified Data.Vector.Mutable              as MV
+import           Data.Word                        (Word32)
+
+import           Foreign                          (copyBytes)
+import           Foreign.ForeignPtr               (ForeignPtr, mallocForeignPtrBytes, newForeignPtr_, withForeignPtr)
+import           Foreign.ForeignPtr.Unsafe        (unsafeForeignPtrToPtr)
+import           Foreign.Ptr                      (Ptr, castPtr, nullPtr, plusPtr)
+import qualified Foreign.Storable                 as S
+
+import           GHC.Generics                     (Generic (..), K1, M1, type (:*:))
+
+import           Language.Souffle.Class           (ContainsInputFact, ContainsOutputFact, Direction (..), Fact (..),
+                                                   FactOptions (..), Marshal (..), MonadSouffle (..),
+                                                   MonadSouffleFileIO (..), Program (..), ProgramOptions (..))
+import qualified Language.Souffle.Internal        as Internal
+import           Language.Souffle.Marshal         (MonadPop (..), MonadPush (..))
+
+import           Prelude                          hiding (init)
 
 type ByteCount :: Type
 type ByteCount = Int
@@ -70,7 +71,7 @@ type ByteBuf = Internal.ByteBuf
 type BufData :: Type
 data BufData
   = BufData
-  { bufPtr :: {-# UNPACK #-} !(ForeignPtr ByteBuf)
+  { bufPtr  :: {-# UNPACK #-} !(ForeignPtr ByteBuf)
   , bufSize :: {-# UNPACK #-} !ByteCount
   }
 
@@ -88,6 +89,7 @@ type SouffleM :: Type -> Type
 newtype SouffleM a = SouffleM (IO a)
   deriving (Functor, Applicative, Monad, MonadIO) via IO
   deriving (Semigroup, Monoid) via (IO a)
+type role SouffleM nominal
 
 {- | Initializes and runs a Souffle program.
 
@@ -122,6 +124,7 @@ type CMarshalFast :: Type -> Type
 newtype CMarshalFast a = CMarshalFast (StateT (Ptr ByteBuf) IO a)
   deriving (Functor, Applicative, Monad, MonadIO, MonadState (Ptr ByteBuf))
   via (StateT (Ptr ByteBuf) IO)
+type role CMarshalFast nominal
 
 runMarshalFastM :: CMarshalFast a -> Ptr ByteBuf -> IO a
 runMarshalFastM (CMarshalFast m) = evalStateT m
@@ -147,27 +150,45 @@ readAsBytes = do
 {-# INLINABLE readAsBytes #-}
 
 instance MonadPush CMarshalFast where
+  pushInt32 :: Int32 -> CMarshalFast ()
   pushInt32 = writeAsBytes
   {-# INLINABLE pushInt32 #-}
+
+  pushUInt32 :: Word32 -> CMarshalFast ()
   pushUInt32 = writeAsBytes
   {-# INLINABLE pushUInt32 #-}
+
+  pushFloat :: Float -> CMarshalFast ()
   pushFloat = writeAsBytes
   {-# INLINABLE pushFloat #-}
+
+  pushString :: String -> CMarshalFast ()
   pushString str = pushText $ T.pack str
   {-# INLINABLE pushString #-}
+
+  pushText :: T.Text -> CMarshalFast ()
   pushText _ =
     error "Fast marshalling does not support serializing string-like values."
   {-# INLINABLE pushText #-}
 
 instance MonadPop CMarshalFast where
+  popInt32 :: CMarshalFast Int32
   popInt32 = readAsBytes
   {-# INLINABLE popInt32 #-}
+
+  popUInt32 :: CMarshalFast Word32
   popUInt32 = readAsBytes
   {-# INLINABLE popUInt32 #-}
+
+  popFloat :: CMarshalFast Float
   popFloat = readAsBytes
   {-# INLINABLE popFloat #-}
+
+  popString :: CMarshalFast String
   popString = T.unpack <$> popText
   {-# INLINABLE popString #-}
+
+  popText :: CMarshalFast T.Text
   popText = do
     byteCount <- popUInt32
     if byteCount == 0
@@ -185,8 +206,8 @@ instance MonadPop CMarshalFast where
 type MarshalState :: Type
 data MarshalState
   = MarshalState
-  { _buf :: {-# UNPACK #-} !BufData
-  , _ptr :: {-# UNPACK #-} !(Ptr ByteBuf)
+  { _buf       :: {-# UNPACK #-} !BufData
+  , _ptr       :: {-# UNPACK #-} !(Ptr ByteBuf)
   , _ptrOffset :: {-# UNPACK #-} !Int
   }
 
@@ -197,6 +218,7 @@ type CMarshalSlow :: Type -> Type
 newtype CMarshalSlow a = CMarshalSlow (StateT MarshalState IO a)
   deriving (Functor, Applicative, Monad, MonadIO, MonadState MarshalState)
   via (StateT MarshalState IO)
+type role CMarshalSlow nominal
 
 runMarshalSlowM :: BufData -> Int -> CMarshalSlow a -> IO a
 runMarshalSlowM bufData byteCount (CMarshalSlow m) = do
@@ -246,14 +268,23 @@ incrementPtr byteCount =
 {-# INLINABLE incrementPtr #-}
 
 instance MonadPush CMarshalSlow where
+  pushInt32 :: Int32 -> CMarshalSlow ()
   pushInt32 = writeAsBytesSlow
   {-# INLINABLE pushInt32 #-}
+
+  pushUInt32 :: Word32 -> CMarshalSlow ()
   pushUInt32 = writeAsBytesSlow
   {-# INLINABLE pushUInt32 #-}
+
+  pushFloat :: Float -> CMarshalSlow ()
   pushFloat = writeAsBytesSlow
   {-# INLINABLE pushFloat #-}
+
+  pushString :: String -> CMarshalSlow ()
   pushString str = pushText $ T.pack str
   {-# INLINABLE pushString #-}
+
+  pushText :: T.Text -> CMarshalSlow ()
   pushText txt = do
     let bs = TE.encodeUtf8 txt  -- TODO: is it possible to get rid of this copy?
         len = BS.length bs
@@ -281,6 +312,7 @@ class Collect c where
   collect :: Marshal a => Word32 -> CMarshalFast (c a)
 
 instance Collect [] where
+  collect :: Marshal a => Word32 -> CMarshalFast [a]
   collect objCount = go objCount [] where
     go count acc
       | count == 0 = pure acc
@@ -290,6 +322,7 @@ instance Collect [] where
   {-# INLINABLE collect #-}
 
 instance Collect V.Vector where
+  collect :: Marshal a => Word32 -> CMarshalFast (V.Vector a)
   collect objCount = do
     vm <- liftIO $ MV.unsafeNew objCount'
     collect' vm 0
@@ -304,6 +337,7 @@ instance Collect V.Vector where
   {-# INLINABLE collect #-}
 
 instance Collect (A.Array Int) where
+  collect :: Marshal a => Word32 -> CMarshalFast (A.Array Int a)
   collect objCount = do
     ma <- liftIO $ A.newArray_ (0, objCount' - 1)
     collect' ma 0
@@ -390,9 +424,11 @@ instance MonadSouffle SouffleM where
   {-# INLINABLE findFact #-}
 
 instance MonadSouffleFileIO SouffleM where
+  loadFiles :: Handler SouffleM prog -> FilePath -> SouffleM ()
   loadFiles (Handle prog _) = SouffleM . Internal.loadAll prog
   {-# INLINABLE loadFiles #-}
 
+  writeFiles :: Handler SouffleM prog -> FilePath -> SouffleM ()
   writeFiles (Handle prog _) = SouffleM . Internal.printAll prog
   {-# INLINABLE writeFiles #-}
 
@@ -403,9 +439,10 @@ data ByteSize
   | Estimated {-# UNPACK #-} !ByteCount
 
 instance Semigroup ByteSize where
-  Exact s1 <> Exact s2 = Exact (s1 + s2)
-  Exact s1 <> Estimated s2 = Estimated (s1 + s2)
-  Estimated s1 <> Exact s2 = Estimated (s1 + s2)
+  (<>) :: ByteSize -> ByteSize -> ByteSize
+  Exact s1 <> Exact s2         = Exact (s1 + s2)
+  Exact s1 <> Estimated s2     = Estimated (s1 + s2)
+  Estimated s1 <> Exact s2     = Estimated (s1 + s2)
   Estimated s1 <> Estimated s2 = Estimated (s1 + s2)
   {-# INLINABLE (<>) #-}
 
@@ -414,37 +451,45 @@ class ToByteSize a where
   toByteSize :: Proxy a -> ByteSize
 
 instance ToByteSize Int32 where
+  toByteSize :: Proxy Int32 -> ByteSize
   toByteSize = const $ Exact 4
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize Word32 where
+  toByteSize :: Proxy Word32 -> ByteSize
   toByteSize = const $ Exact 4
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize Float where
+  toByteSize :: Proxy Float -> ByteSize
   toByteSize = const $ Exact 4
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize String where
   -- 4 for length prefix + 32 for actual string
+  toByteSize :: Proxy String -> ByteSize
   toByteSize = const $ Estimated 36
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize T.Text where
   -- 4 for length prefix + 32 for actual string
+  toByteSize :: Proxy T.Text -> ByteSize
   toByteSize = const $ Estimated 36
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize TL.Text where
   -- 4 for length prefix + 32 for actual string
+  toByteSize :: Proxy TL.Text -> ByteSize
   toByteSize = const $ Estimated 36
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize '[] where
+  toByteSize :: Proxy '[] -> ByteSize
   toByteSize = const $ Exact 0
   {-# INLINABLE toByteSize #-}
 
 instance (ToByteSize a, ToByteSize as) => ToByteSize (a ': as) where
+  toByteSize :: (ToByteSize a2, ToByteSize as) => Proxy (a2 : as) -> ByteSize
   toByteSize =
     const $ toByteSize (Proxy @a) <> toByteSize (Proxy @as)
   {-# INLINABLE toByteSize #-}

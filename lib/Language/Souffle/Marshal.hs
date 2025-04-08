@@ -1,8 +1,3 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
-{-# LANGUAGE DefaultSignatures, TypeOperators #-}
-{-# LANGUAGE TypeFamilies, DataKinds, UndecidableInstances #-}
-
 -- | This module exposes a uniform interface to marshal values
 --   to and from Souffle Datalog. This is done via the 'Marshal' typeclass.
 --   Also, a mechanism is exposed for generically deriving marshalling
@@ -14,13 +9,14 @@ module Language.Souffle.Marshal
   , SimpleProduct
   ) where
 
-import GHC.TypeLits
-import GHC.Generics
-import Data.Int
-import Data.Word
-import Data.Kind
-import qualified Data.Text as T
+import           Data.Int       (Int32)
+import           Data.Kind      (Constraint, Type)
+import qualified Data.Text      as T
 import qualified Data.Text.Lazy as TL
+import           Data.Word      (Word32)
+
+import           GHC.Generics   (Generic (..), K1 (..), M1 (..), U1, V1, type (:*:) (..), type (:+:))
+import           GHC.TypeLits   (ErrorMessage (..), TypeError)
 
 {- | A typeclass for serializing primitive values from Haskell to Datalog.
 
@@ -96,42 +92,61 @@ class Marshal a where
     => m a
   push a = gpush (from a)
   {-# INLINABLE push #-}
+
   pop = to <$> gpop
   {-# INLINABLE pop #-}
 
 instance Marshal Int32 where
+  push :: MonadPush m => Int32 -> m ()
   push = pushInt32
   {-# INLINABLE push #-}
+
+  pop :: MonadPop m => m Int32
   pop = popInt32
   {-# INLINABLE pop #-}
 
 instance Marshal Word32 where
+  push :: MonadPush m => Word32 -> m ()
   push = pushUInt32
   {-# INLINABLE push #-}
+
+  pop :: MonadPop m => m Word32
   pop = popUInt32
   {-# INLINABLE pop #-}
 
 instance Marshal Float where
+  push :: MonadPush m => Float -> m ()
   push = pushFloat
   {-# INLINABLE push #-}
+
+  pop :: MonadPop m => m Float
   pop = popFloat
   {-# INLINABLE pop #-}
 
 instance Marshal String where
+  push :: MonadPush m => String -> m ()
   push = pushString
   {-# INLINABLE push #-}
+
+  pop :: MonadPop m => m String
   pop = popString
   {-# INLINABLE pop #-}
 
 instance Marshal T.Text where
+  push :: MonadPush m => T.Text -> m ()
   push = pushText
   {-# INLINABLE push #-}
+
+  pop :: MonadPop m => m T.Text
   pop = popText
   {-# INLINABLE pop #-}
 
 instance Marshal TL.Text where
+  push :: MonadPush m => TL.Text -> m ()
   push = push . TL.toStrict
   {-# INLINABLE push #-}
+
+  pop :: MonadPop m => m TL.Text
   pop = TL.fromStrict <$> pop
   {-# INLINABLE pop #-}
 
@@ -141,22 +156,31 @@ class GMarshal f where
   gpop  :: MonadPop m => m (f a)
 
 instance Marshal a => GMarshal (K1 i a) where
+  gpush :: (Marshal a, MonadPush m) => K1 i a a1 -> m ()
   gpush (K1 x) = push x
   {-# INLINABLE gpush #-}
+
+  gpop :: (Marshal a, MonadPop m) => m (K1 i a a1)
   gpop = K1 <$> pop
   {-# INLINABLE gpop #-}
 
 instance (GMarshal f, GMarshal g) => GMarshal (f :*: g) where
+  gpush :: (GMarshal f, GMarshal g, MonadPush m) => (:*:) f g a -> m ()
   gpush (a :*: b) = do
     gpush a
     gpush b
   {-# INLINABLE gpush #-}
+
+  gpop :: (GMarshal f, GMarshal g, MonadPop m) => m ((:*:) f g a)
   gpop = (:*:) <$> gpop <*> gpop
   {-# INLINABLE gpop #-}
 
 instance GMarshal a => GMarshal (M1 i c a) where
+  gpush :: (GMarshal a, MonadPush m) => M1 i c a a1 -> m ()
   gpush (M1 x) = gpush x
   {-# INLINABLE gpush #-}
+
+  gpop :: (GMarshal a, MonadPop m) => m (M1 i c a a1)
   gpop = M1 <$> gpop
   {-# INLINABLE gpop #-}
 

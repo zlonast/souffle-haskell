@@ -1,7 +1,3 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE FlexibleInstances, TypeFamilies, DerivingVia, InstanceSigs #-}
-{-# LANGUAGE UndecidableInstances, RoleAnnotations #-}
-
 -- | This module provides an implementation for the `MonadSouffle` typeclass
 --   defined in "Language.Souffle.Class".
 --   It makes use of the Souffle interpreter and CSV files to offer an
@@ -30,35 +26,42 @@ module Language.Souffle.Interpreted
   , souffleStdErr
   ) where
 
-import Prelude hiding (init)
-import Data.Kind (Type, Constraint)
+import           Control.DeepSeq            (deepseq)
+import           Control.Exception          (ErrorCall (..), bracket, throwIO)
+import           Control.Monad              (forM, forM_, (<$!>))
+import           Control.Monad.IO.Class     (MonadIO (..))
+import           Control.Monad.State.Strict (MonadState (state), State, evalState, execState, modify)
 
-import Control.DeepSeq (deepseq)
-import Control.Exception (ErrorCall(..), throwIO, bracket)
-import Control.Monad.State.Strict (State, MonadState (state), modify, evalState, execState)
-import Data.IORef
-import Data.Foldable (traverse_)
-import qualified Data.List as List hiding (init)
-import Data.Semigroup (Last(..))
-import Data.Maybe (fromMaybe)
-import Data.Proxy
-import qualified Data.Array as A
-import qualified Data.Text as T
-import qualified Data.Vector as V
-import Data.Word
-import System.Directory
-import System.Environment
-import System.Exit
-import System.FilePath
-import System.IO (hGetContents, hClose)
-import System.IO.Temp
-import System.Process
-import Text.Printf
+import qualified Data.Array                 as A
+import           Data.Foldable              (traverse_)
+import           Data.Int                   (Int32)
+import           Data.IORef                 (IORef, modifyIORef', newIORef, readIORef, writeIORef)
+import           Data.Kind                  (Constraint, Type)
+import qualified Data.List                  as List hiding (init)
+import           Data.Maybe                 (fromMaybe)
+import           Data.Proxy                 (Proxy (..))
+import           Data.Semigroup             (Last (..))
+import qualified Data.Text                  as T
+import qualified Data.Vector                as V
+import           Data.Word                  (Word32, Word64)
 
-import Language.Souffle.Class
-import Language.Souffle.Marshal
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad (forM, (<$!>), forM_)
+import           Language.Souffle.Class     (ContainsInputFact, ContainsOutputFact, Direction (..), Fact (..),
+                                             FactOptions (..), Marshal (..), MonadSouffle (..), Program (..),
+                                             ProgramOptions (..))
+import           Language.Souffle.Marshal   (MonadPop (..), MonadPush (..))
+
+import           Prelude                    hiding (init)
+
+import           System.Directory           (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
+import           System.Environment         (lookupEnv)
+import           System.Exit                (ExitCode (..))
+import           System.FilePath            ((<.>), (</>))
+import           System.IO                  (hClose, hGetContents)
+import           System.IO.Temp             (createTempDirectory, getCanonicalTemporaryDirectory)
+import           System.Process             (CreateProcess (..), StdStream (..), createProcess, createProcess_, shell,
+                                             waitForProcess)
+
+import           Text.Printf                (printf)
 
 
 -- | A monad for executing Souffle-related actions in.
@@ -66,6 +69,7 @@ type SouffleM :: Type -> Type
 newtype SouffleM a = SouffleM (IO a)
   deriving (Functor, Applicative, Monad, MonadIO) via IO
   deriving (Semigroup, Monoid) via (IO a)
+type role SouffleM representational
 
 -- | A helper data type for storing the configurable settings of the
 --   interpreter.
@@ -82,10 +86,10 @@ newtype SouffleM a = SouffleM (IO a)
 type Config :: Type
 data Config
   = Config
-  { cfgDatalogDir   :: FilePath
-  , cfgSouffleBin   :: Maybe FilePath
-  , cfgFactDir      :: Maybe FilePath
-  , cfgOutputDir    :: Maybe FilePath
+  { cfgDatalogDir :: FilePath
+  , cfgSouffleBin :: Maybe FilePath
+  , cfgFactDir    :: Maybe FilePath
+  , cfgOutputDir  :: Maybe FilePath
   } deriving stock Show
 
 -- | Retrieves the default config for the interpreter. These settings can
@@ -198,44 +202,55 @@ type IMarshal :: Type -> Type
 newtype IMarshal a = IMarshal (State [String] a)
   deriving (Functor, Applicative, Monad, MonadState [String])
   via (State [String])
+type role IMarshal nominal
 
 instance MonadPush IMarshal where
+  pushInt32 :: Int32 -> IMarshal ()
   pushInt32 int = modify (show int:)
   {-# INLINABLE pushInt32 #-}
 
+  pushUInt32 :: Word32 -> IMarshal ()
   pushUInt32 int = modify (show int:)
   {-# INLINABLE pushUInt32 #-}
 
+  pushFloat :: Float -> IMarshal ()
   pushFloat float = modify (show float:)
   {-# INLINABLE pushFloat #-}
 
+  pushString :: String -> IMarshal ()
   pushString str = modify (str:)
   {-# INLINABLE pushString #-}
 
+  pushText :: T.Text -> IMarshal ()
   pushText txt = pushString (T.unpack txt)
   {-# INLINABLE pushText #-}
 
 instance MonadPop IMarshal where
+  popInt32 :: IMarshal Int32
   popInt32 = state $ \case
     [] -> error "Empty fact stack"
     (h:t) -> (read h, t)
   {-# INLINABLE popInt32 #-}
 
+  popUInt32 :: IMarshal Word32
   popUInt32 = state $ \case
     [] -> error "Empty fact stack"
     (h:t) -> (read h, t)
   {-# INLINABLE popUInt32 #-}
 
+  popFloat :: IMarshal Float
   popFloat = state $ \case
     [] -> error "Empty fact stack"
     (h:t) -> (read h, t)
   {-# INLINABLE popFloat #-}
 
+  popString :: IMarshal String
   popString = state $ \case
     [] -> error "Empty fact stack"
     (h:t) -> (h, t)
   {-# INLINABLE popString #-}
 
+  popText :: IMarshal T.Text
   popText = do
     str <- state $ \case
       [] -> error "Empty fact stack"
@@ -256,6 +271,7 @@ class Collect c where
   collect :: Marshal a => FilePath -> IO (c a)
 
 instance Collect [] where
+  collect :: Marshal a => FilePath -> IO [a]
   collect factFile = do
     factLines <- readCSVFile factFile
     let facts = map (popMarshalT pop) factLines
@@ -263,10 +279,12 @@ instance Collect [] where
   {-# INLINABLE collect #-}
 
 instance Collect V.Vector where
+  collect :: Marshal a => FilePath -> IO (V.Vector a)
   collect factFile = V.fromList <$!> collect factFile
   {-# INLINABLE collect #-}
 
 instance Collect (A.Array Int) where
+  collect :: Marshal a => FilePath -> IO (A.Array Int a)
   collect factFile = do
     facts <- collect factFile
     let count = length facts
@@ -278,6 +296,7 @@ instance MonadSouffle SouffleM where
   type CollectFacts SouffleM c = Collect c
   type SubmitFacts SouffleM _ = ()
 
+  run :: Handler SouffleM prog -> SouffleM ()
   run (Handle refHandleData refHandleStdOut refHandleStdErr) = liftIO $ do
     handle <- readIORef refHandleData
     -- Invoke the souffle binary using parameters, supposing that the facts
@@ -313,10 +332,12 @@ instance MonadSouffle SouffleM where
       )
   {-# INLINABLE run #-}
 
+  setNumThreads :: Handler SouffleM prog -> Word64 -> SouffleM ()
   setNumThreads handle n = liftIO $
     modifyIORef' (handleData handle) (\h -> h { noOfThreads = n })
   {-# INLINABLE setNumThreads #-}
 
+  getNumThreads :: Handler SouffleM prog -> SouffleM Word64
   getNumThreads handle = liftIO $
     noOfThreads <$> readIORef (handleData handle)
   {-# INLINABLE getNumThreads #-}
@@ -376,7 +397,7 @@ locateSouffle = do
       contents <- hGetContents hout
       case words contents of
         [souffleBin] -> pure $ Just souffleBin
-        _ -> pure Nothing
+        _            -> pure Nothing
 {-# INLINABLE locateSouffle #-}
 
 readCSVFile :: FilePath -> IO [[String]]

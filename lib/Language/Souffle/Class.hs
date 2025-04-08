@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds, UndecidableInstances, FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies, TypeOperators, TypeApplications #-}
-
 -- | This module provides the top level API for Souffle related operations.
 --   It makes use of Haskell's powerful typesystem to make certain invalid states
 --   impossible to represent. It does this with a small type level DSL for
@@ -27,20 +24,23 @@ module Language.Souffle.Class
   , MonadSouffleFileIO(..)
   ) where
 
-import Prelude hiding ( init )
-
-import Control.Monad.Except
-import Control.Monad.Reader
-import Control.Monad.Writer
-import qualified Control.Monad.RWS.Strict as StrictRWS
-import qualified Control.Monad.RWS.Lazy as LazyRWS
+import           Control.Monad.Except       (ExceptT)
+import           Control.Monad.Reader       (MonadTrans (..), ReaderT)
+import qualified Control.Monad.RWS.Lazy     as LazyRWS
+import qualified Control.Monad.RWS.Strict   as StrictRWS
+import qualified Control.Monad.State.Lazy   as LazyState
 import qualified Control.Monad.State.Strict as StrictState
-import qualified Control.Monad.State.Lazy as LazyState
-import Data.Proxy
-import Data.Kind
-import Data.Word
-import GHC.TypeLits
-import qualified Language.Souffle.Marshal as Marshal
+import           Control.Monad.Writer       (WriterT)
+
+import           Data.Kind                  (Constraint, Type)
+import           Data.Proxy                 (Proxy (..))
+import           Data.Word                  (Word64)
+
+import           GHC.TypeLits               (ErrorMessage (..), KnownSymbol, Symbol, TypeError, symbolVal)
+
+import qualified Language.Souffle.Marshal   as Marshal
+
+import           Prelude                    hiding (init)
 
 
 -- | A helper type family for checking if a specific Souffle `Program` contains
@@ -142,12 +142,13 @@ class Program a where
 --
 -- See also: 'FactOptions'.
 type ProgramOptions :: Type -> Symbol -> [Type] -> Type
-newtype ProgramOptions prog progName facts
-  = ProgramOptions prog
+newtype ProgramOptions prog progName facts = ProgramOptions prog
+type role ProgramOptions representational phantom phantom
 
 instance KnownSymbol progName => Program (ProgramOptions prog progName facts) where
   type ProgramFacts (ProgramOptions _ _ facts) = facts
 
+  programName :: KnownSymbol progName => ProgramOptions prog progName facts -> String
   programName = const $ symbolVal (Proxy @progName)
   {-# INLINABLE programName #-}
 
@@ -191,21 +192,25 @@ class Marshal.Marshal a => Fact a where
 --
 -- See also: 'ProgramOptions'.
 type FactOptions :: Type -> Symbol -> Direction -> Type
-newtype FactOptions fact factName dir
-  = FactOptions fact
+newtype FactOptions fact factName dir = FactOptions fact
+type role FactOptions representational phantom phantom
 
 instance Marshal.Marshal fact => Marshal.Marshal (FactOptions fact name dir) where
+  push :: (Marshal.Marshal fact, Marshal.MonadPush m) => FactOptions fact name dir -> m ()
   push (FactOptions fact) = Marshal.push fact
   {-# INLINABLE push #-}
+
+  pop :: (Marshal.Marshal fact, Marshal.MonadPop m) => m (FactOptions fact name dir)
   pop = FactOptions <$> Marshal.pop
   {-# INLINABLE pop #-}
 
 instance ( Marshal.Marshal fact
-         , KnownSymbol factName
-         ) => Fact (FactOptions fact factName dir) where
+         , KnownSymbol name
+         ) => Fact (FactOptions fact name dir) where
   type FactDirection (FactOptions _ _ dir) = dir
 
-  factName = const $ symbolVal (Proxy @factName)
+  factName :: (Marshal.Marshal fact, KnownSymbol name) => Proxy (FactOptions fact name dir) -> String
+  factName = const $ symbolVal (Proxy @name)
   {-# INLINABLE factName #-}
 
 
@@ -272,142 +277,271 @@ class Monad m => MonadSouffle m where
            => Handler m prog -> t a -> m ()
 
 instance MonadSouffle m => MonadSouffle (ReaderT r m) where
-  type Handler (ReaderT r m) = Handler m
+  type Handler      (ReaderT r m)   = Handler m
   type CollectFacts (ReaderT r m) c = CollectFacts m c
-  type SubmitFacts (ReaderT r m) a = SubmitFacts m a
+  type SubmitFacts  (ReaderT r m) a = SubmitFacts m a
 
+  run :: MonadSouffle m => Handler (ReaderT r m) prog -> ReaderT r m ()
   run = lift . run
   {-# INLINABLE run #-}
+
+  setNumThreads :: MonadSouffle m => Handler (ReaderT r m) prog -> Word64 -> ReaderT r m ()
   setNumThreads prog = lift . setNumThreads prog
   {-# INLINABLE setNumThreads #-}
+
+  getNumThreads :: MonadSouffle m => Handler (ReaderT r m) prog -> ReaderT r m Word64
   getNumThreads = lift . getNumThreads
   {-# INLINABLE getNumThreads #-}
+
+  getFacts :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, CollectFacts (ReaderT r m) c)
+           => Handler (ReaderT r m) prog -> ReaderT r m (c a)
   getFacts = lift . getFacts
   {-# INLINABLE getFacts #-}
+
+  findFact :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, Eq a, SubmitFacts (ReaderT r m) a)
+           => Handler (ReaderT r m) prog -> a -> ReaderT r m (Maybe a)
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
+
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (ReaderT r m) a)
+          => Handler (ReaderT r m) prog -> a -> ReaderT r m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
+
+  addFacts :: (MonadSouffle m, Foldable t, Fact a, ContainsInputFact prog a, SubmitFacts (ReaderT r m) a)
+           => Handler (ReaderT r m) prog -> t a -> ReaderT r m ()
   addFacts facts = lift . addFacts facts
   {-# INLINABLE addFacts #-}
 
 instance (Monoid w, MonadSouffle m) => MonadSouffle (WriterT w m) where
-  type Handler (WriterT w m) = Handler m
+  type Handler      (WriterT w m)   = Handler m
   type CollectFacts (WriterT w m) c = CollectFacts m c
-  type SubmitFacts (WriterT w m) a = SubmitFacts m a
+  type SubmitFacts  (WriterT w m) a = SubmitFacts m a
 
+  run :: (Monoid w, MonadSouffle m) => Handler (WriterT w m) prog -> WriterT w m ()
   run = lift . run
   {-# INLINABLE run #-}
+
+  setNumThreads :: (Monoid w, MonadSouffle m) => Handler (WriterT w m) prog -> Word64 -> WriterT w m ()
   setNumThreads prog = lift . setNumThreads prog
   {-# INLINABLE setNumThreads #-}
+
+  getNumThreads :: (Monoid w, MonadSouffle m) => Handler (WriterT w m) prog -> WriterT w m Word64
   getNumThreads = lift . getNumThreads
   {-# INLINABLE getNumThreads #-}
+
+  getFacts :: (Monoid w, MonadSouffle m, Fact a, ContainsOutputFact prog a, CollectFacts (WriterT w m) c)
+           => Handler (WriterT w m) prog -> WriterT w m (c a)
   getFacts = lift . getFacts
   {-# INLINABLE getFacts #-}
+
+  findFact :: (Monoid w, MonadSouffle m, Fact a, ContainsOutputFact prog a, Eq a, SubmitFacts (WriterT w m) a)
+           => Handler (WriterT w m) prog -> a -> WriterT w m (Maybe a)
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
+
+  addFact :: (Monoid w, MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (WriterT w m) a)
+          => Handler (WriterT w m) prog -> a -> WriterT w m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
+
+  addFacts :: (Monoid w, MonadSouffle m, Foldable t, Fact a, ContainsInputFact prog a, SubmitFacts (WriterT w m) a)
+           => Handler (WriterT w m) prog -> t a -> WriterT w m ()
   addFacts facts = lift . addFacts facts
   {-# INLINABLE addFacts #-}
 
 instance MonadSouffle m => MonadSouffle (LazyState.StateT s m) where
-  type Handler (LazyState.StateT s m) = Handler m
+  type Handler      (LazyState.StateT s m)   = Handler m
   type CollectFacts (LazyState.StateT s m) c = CollectFacts m c
-  type SubmitFacts (LazyState.StateT s m) a = SubmitFacts m a
+  type SubmitFacts  (LazyState.StateT s m) a = SubmitFacts m a
 
+  run :: MonadSouffle m => Handler (LazyState.StateT s m) prog -> LazyState.StateT s m ()
   run = lift . run
   {-# INLINABLE run #-}
+
+  setNumThreads :: MonadSouffle m =>
+    Handler (LazyState.StateT s m) prog -> Word64 -> LazyState.StateT s m ()
   setNumThreads prog = lift . setNumThreads prog
   {-# INLINABLE setNumThreads #-}
+
+  getNumThreads :: MonadSouffle m =>
+    Handler (LazyState.StateT s m) prog -> LazyState.StateT s m Word64
   getNumThreads = lift . getNumThreads
   {-# INLINABLE getNumThreads #-}
+
+  getFacts :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, CollectFacts (LazyState.StateT s m) c) =>
+    Handler (LazyState.StateT s m) prog -> LazyState.StateT s m (c a)
   getFacts = lift . getFacts
   {-# INLINABLE getFacts #-}
+
+  findFact :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, Eq a, SubmitFacts (LazyState.StateT s m) a) =>
+    Handler (LazyState.StateT s m) prog -> a -> LazyState.StateT s m (Maybe a)
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
+
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (LazyState.StateT s m) a) =>
+    Handler (LazyState.StateT s m) prog -> a -> LazyState.StateT s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
+
+  addFacts :: (MonadSouffle m, Foldable t, Fact a, ContainsInputFact prog a, SubmitFacts (LazyState.StateT s m) a) =>
+    Handler (LazyState.StateT s m) prog -> t a -> LazyState.StateT s m ()
   addFacts facts = lift . addFacts facts
   {-# INLINABLE addFacts #-}
 
 instance MonadSouffle m => MonadSouffle (StrictState.StateT s m) where
-  type Handler (StrictState.StateT s m) = Handler m
+  type Handler      (StrictState.StateT s m)   = Handler m
   type CollectFacts (StrictState.StateT s m) c = CollectFacts m c
-  type SubmitFacts (StrictState.StateT s m) a = SubmitFacts m a
+  type SubmitFacts  (StrictState.StateT s m) a = SubmitFacts m a
 
+  run :: MonadSouffle m => Handler (StrictState.StateT s m) prog -> StrictState.StateT s m ()
   run = lift . run
   {-# INLINABLE run #-}
+
+  setNumThreads :: MonadSouffle m =>
+    Handler (StrictState.StateT s m) prog -> Word64 -> StrictState.StateT s m ()
   setNumThreads prog = lift . setNumThreads prog
   {-# INLINABLE setNumThreads #-}
+
+  getNumThreads :: MonadSouffle m =>
+    Handler (StrictState.StateT s m) prog -> StrictState.StateT s m Word64
   getNumThreads = lift . getNumThreads
   {-# INLINABLE getNumThreads #-}
+
+  getFacts :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, CollectFacts (StrictState.StateT s m) c) =>
+    Handler (StrictState.StateT s m) prog -> StrictState.StateT s m (c a)
   getFacts = lift . getFacts
   {-# INLINABLE getFacts #-}
+
+  findFact :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, Eq a, SubmitFacts (StrictState.StateT s m) a) =>
+    Handler (StrictState.StateT s m) prog -> a -> StrictState.StateT s m (Maybe a)
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
+
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (StrictState.StateT s m) a) =>
+    Handler (StrictState.StateT s m) prog -> a -> StrictState.StateT s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
+
+  addFacts :: (MonadSouffle m, Foldable t, Fact a, ContainsInputFact prog a, SubmitFacts (StrictState.StateT s m) a) =>
+    Handler (StrictState.StateT s m) prog -> t a -> StrictState.StateT s m ()
   addFacts facts = lift . addFacts facts
   {-# INLINABLE addFacts #-}
 
 instance (MonadSouffle m, Monoid w) => MonadSouffle (LazyRWS.RWST r w s m) where
-  type Handler (LazyRWS.RWST r w s m) = Handler m
+  type Handler      (LazyRWS.RWST r w s m)   = Handler m
   type CollectFacts (LazyRWS.RWST r w s m) c = CollectFacts m c
-  type SubmitFacts (LazyRWS.RWST r w s m) a = SubmitFacts m a
+  type SubmitFacts  (LazyRWS.RWST r w s m) a = SubmitFacts m a
 
+  run :: (MonadSouffle m, Monoid w) =>
+    Handler (LazyRWS.RWST r w s m) prog -> LazyRWS.RWST r w s m ()
   run = lift . run
   {-# INLINABLE run #-}
+
+  setNumThreads :: (MonadSouffle m, Monoid w) =>
+    Handler (LazyRWS.RWST r w s m) prog -> Word64 -> LazyRWS.RWST r w s m ()
   setNumThreads prog = lift . setNumThreads prog
   {-# INLINABLE setNumThreads #-}
+
+  getNumThreads :: (MonadSouffle m, Monoid w) =>
+    Handler (LazyRWS.RWST r w s m) prog -> LazyRWS.RWST r w s m Word64
   getNumThreads = lift . getNumThreads
   {-# INLINABLE getNumThreads #-}
+
+  getFacts :: (MonadSouffle m, Monoid w, Fact a, ContainsOutputFact prog a, CollectFacts (LazyRWS.RWST r w s m) c) =>
+    Handler (LazyRWS.RWST r w s m) prog -> LazyRWS.RWST r w s m (c a)
   getFacts = lift . getFacts
   {-# INLINABLE getFacts #-}
+
+  findFact :: (MonadSouffle m, Monoid w, Fact a, ContainsOutputFact prog a, Eq a, SubmitFacts (LazyRWS.RWST r w s m) a) =>
+   Handler (LazyRWS.RWST r w s m) prog -> a -> LazyRWS.RWST r w s m (Maybe a)
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
+
+  addFact :: (MonadSouffle m, Monoid w, Fact a, ContainsInputFact prog a, SubmitFacts (LazyRWS.RWST r w s m) a) =>
+    Handler (LazyRWS.RWST r w s m) prog -> a -> LazyRWS.RWST r w s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
+
+  addFacts :: (MonadSouffle m, Monoid w, Foldable t, Fact a, ContainsInputFact prog a, SubmitFacts (LazyRWS.RWST r w s m) a) =>
+    Handler (LazyRWS.RWST r w s m) prog -> t a -> LazyRWS.RWST r w s m ()
   addFacts facts = lift . addFacts facts
   {-# INLINABLE addFacts #-}
 
 instance (MonadSouffle m, Monoid w) => MonadSouffle (StrictRWS.RWST r w s m) where
-  type Handler (StrictRWS.RWST r w s m) = Handler m
+  type Handler      (StrictRWS.RWST r w s m)   = Handler m
   type CollectFacts (StrictRWS.RWST r w s m) c = CollectFacts m c
-  type SubmitFacts (StrictRWS.RWST r w s m) a = SubmitFacts m a
+  type SubmitFacts  (StrictRWS.RWST r w s m) a = SubmitFacts m a
 
+  run :: (MonadSouffle m, Monoid w) => Handler (StrictRWS.RWST r w s m) prog -> StrictRWS.RWST r w s m ()
   run = lift . run
   {-# INLINABLE run #-}
+
+  setNumThreads :: (MonadSouffle m, Monoid w) =>
+    Handler (StrictRWS.RWST r w s m) prog -> Word64 -> StrictRWS.RWST r w s m ()
   setNumThreads prog = lift . setNumThreads prog
   {-# INLINABLE setNumThreads #-}
+
+  getNumThreads :: (MonadSouffle m, Monoid w) =>
+    Handler (StrictRWS.RWST r w s m) prog -> StrictRWS.RWST r w s m Word64
   getNumThreads = lift . getNumThreads
   {-# INLINABLE getNumThreads #-}
+
+  getFacts :: (MonadSouffle m, Monoid w, Fact a, ContainsOutputFact prog a, CollectFacts (StrictRWS.RWST r w s m) c) =>
+    Handler (StrictRWS.RWST r w s m) prog -> StrictRWS.RWST r w s m (c a)
   getFacts = lift . getFacts
   {-# INLINABLE getFacts #-}
+
+  findFact :: (MonadSouffle m, Monoid w, Fact a, ContainsOutputFact prog a, Eq a, SubmitFacts (StrictRWS.RWST r w s m) a) =>
+    Handler (StrictRWS.RWST r w s m) prog -> a -> StrictRWS.RWST r w s m (Maybe a)
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
+
+  addFact :: (MonadSouffle m, Monoid w, Fact a, ContainsInputFact prog a, SubmitFacts (StrictRWS.RWST r w s m) a) =>
+    Handler (StrictRWS.RWST r w s m) prog -> a -> StrictRWS.RWST r w s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
+
+  addFacts :: (MonadSouffle m, Monoid w, Foldable t, Fact a, ContainsInputFact prog a, SubmitFacts (StrictRWS.RWST r w s m) a) =>
+    Handler (StrictRWS.RWST r w s m) prog -> t a -> StrictRWS.RWST r w s m ()
   addFacts facts = lift . addFacts facts
   {-# INLINABLE addFacts #-}
 
 instance MonadSouffle m => MonadSouffle (ExceptT e m) where
-  type Handler (ExceptT e m) = Handler m
+  type Handler      (ExceptT e m)   = Handler m
   type CollectFacts (ExceptT e m) c = CollectFacts m c
-  type SubmitFacts (ExceptT e m) a = SubmitFacts m a
+  type SubmitFacts  (ExceptT e m) a = SubmitFacts m a
 
+  run :: MonadSouffle m => Handler (ExceptT e m) prog -> ExceptT e m ()
   run = lift . run
   {-# INLINABLE run #-}
+
+  setNumThreads :: MonadSouffle m =>
+    Handler (ExceptT e m) prog -> Word64 -> ExceptT e m ()
   setNumThreads prog = lift . setNumThreads prog
   {-# INLINABLE setNumThreads #-}
+
+  getNumThreads :: MonadSouffle m => Handler (ExceptT e m) prog -> ExceptT e m Word64
   getNumThreads = lift . getNumThreads
   {-# INLINABLE getNumThreads #-}
+
+  getFacts :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, CollectFacts (ExceptT e m) c) =>
+    Handler (ExceptT e m) prog -> ExceptT e m (c a)
   getFacts = lift . getFacts
   {-# INLINABLE getFacts #-}
+
+  findFact :: (MonadSouffle m, Fact a, ContainsOutputFact prog a, Eq a,SubmitFacts (ExceptT e m) a) =>
+    Handler (ExceptT e m) prog -> a -> ExceptT e m (Maybe a)
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
+
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (ExceptT e m) a) =>
+    Handler (ExceptT e m) prog -> a -> ExceptT e m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
+
+  addFacts :: (MonadSouffle m, Foldable t, Fact a, ContainsInputFact prog a, SubmitFacts (ExceptT e m) a) =>
+    Handler (ExceptT e m) prog -> t a -> ExceptT e m ()
   addFacts facts = lift . addFacts facts
   {-# INLINABLE addFacts #-}
 
@@ -422,44 +556,77 @@ class MonadSouffle m => MonadSouffleFileIO m where
   writeFiles :: Handler m prog -> FilePath -> m ()
 
 instance MonadSouffleFileIO m => MonadSouffleFileIO (ReaderT r m) where
+  loadFiles :: MonadSouffleFileIO m =>
+    Handler (ReaderT r m) prog -> FilePath -> ReaderT r m ()
   loadFiles prog = lift . loadFiles prog
   {-# INLINABLE loadFiles #-}
+
+  writeFiles :: MonadSouffleFileIO m =>
+    Handler (ReaderT r m) prog -> FilePath -> ReaderT r m ()
   writeFiles prog = lift . writeFiles prog
   {-# INLINABLE writeFiles #-}
 
 instance (Monoid w, MonadSouffleFileIO m) => MonadSouffleFileIO (WriterT w m) where
+  loadFiles :: (Monoid w, MonadSouffleFileIO m) =>
+    Handler (WriterT w m) prog -> FilePath -> WriterT w m ()
   loadFiles prog = lift . loadFiles prog
   {-# INLINABLE loadFiles #-}
+
+  writeFiles :: (Monoid w, MonadSouffleFileIO m) =>
+    Handler (WriterT w m) prog -> FilePath -> WriterT w m ()
   writeFiles prog = lift . writeFiles prog
   {-# INLINABLE writeFiles #-}
 
 instance MonadSouffleFileIO m => MonadSouffleFileIO (StrictState.StateT s m) where
+  loadFiles :: MonadSouffleFileIO m =>
+    Handler (StrictState.StateT s m) prog -> FilePath -> StrictState.StateT s m ()
   loadFiles prog = lift . loadFiles prog
   {-# INLINABLE loadFiles #-}
+
+  writeFiles :: MonadSouffleFileIO m =>
+    Handler (StrictState.StateT s m) prog -> FilePath -> StrictState.StateT s m ()
   writeFiles prog = lift . writeFiles prog
   {-# INLINABLE writeFiles #-}
 
 instance MonadSouffleFileIO m => MonadSouffleFileIO (LazyState.StateT s m) where
+  loadFiles :: MonadSouffleFileIO m =>
+    Handler (LazyState.StateT s m) prog -> FilePath -> LazyState.StateT s m ()
   loadFiles prog = lift . loadFiles prog
   {-# INLINABLE loadFiles #-}
+
+  writeFiles :: MonadSouffleFileIO m =>
+    Handler (LazyState.StateT s m) prog -> FilePath -> LazyState.StateT s m ()
   writeFiles prog = lift . writeFiles prog
   {-# INLINABLE writeFiles #-}
 
 instance (MonadSouffleFileIO m, Monoid w) => MonadSouffleFileIO (LazyRWS.RWST r w s m) where
+  loadFiles :: (MonadSouffleFileIO m, Monoid w) =>
+    Handler (LazyRWS.RWST r w s m) prog -> FilePath -> LazyRWS.RWST r w s m ()
   loadFiles prog = lift . loadFiles prog
   {-# INLINABLE loadFiles #-}
+
+  writeFiles :: (MonadSouffleFileIO m, Monoid w)
+             => Handler (LazyRWS.RWST r w s m) prog -> FilePath -> LazyRWS.RWST r w s m ()
   writeFiles prog = lift . writeFiles prog
   {-# INLINABLE writeFiles #-}
 
 instance (MonadSouffleFileIO m, Monoid w) => MonadSouffleFileIO (StrictRWS.RWST r w s m) where
+  loadFiles :: (MonadSouffleFileIO m, Monoid w) =>
+    Handler (StrictRWS.RWST r w s m) prog -> FilePath -> StrictRWS.RWST r w s m ()
   loadFiles prog = lift . loadFiles prog
   {-# INLINABLE loadFiles #-}
+
+  writeFiles :: (MonadSouffleFileIO m, Monoid w) =>
+    Handler (StrictRWS.RWST r w s m) prog -> FilePath -> StrictRWS.RWST r w s m ()
   writeFiles prog = lift . writeFiles prog
   {-# INLINABLE writeFiles #-}
 
 instance MonadSouffleFileIO m => MonadSouffleFileIO (ExceptT s m) where
+  loadFiles :: MonadSouffleFileIO m => Handler (ExceptT s m) prog -> FilePath -> ExceptT s m ()
   loadFiles prog = lift . loadFiles prog
   {-# INLINABLE loadFiles #-}
+
+  writeFiles :: MonadSouffleFileIO m => Handler (ExceptT s m) prog -> FilePath -> ExceptT s m ()
   writeFiles prog = lift . writeFiles prog
   {-# INLINABLE writeFiles #-}
 

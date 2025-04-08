@@ -1,4 +1,3 @@
-
 -- | An internal module, providing a slightly higher level interface than
 --   "Language.Souffle.Internal.Bindings".
 --   It uses more commonly found data types instead of the low level C types
@@ -23,17 +22,20 @@ module Language.Souffle.Internal
   , containsFact
   ) where
 
-import Prelude hiding ( init )
-import Data.Functor ( (<&>) )
-import Data.Word
-import Foreign.C.String
-import Foreign.C.Types
-import Foreign.ForeignPtr
-import Foreign.Ptr
+import           Control.Exception                  (mask_)
+
+import           Data.Functor                       ((<&>))
+import           Data.Word                          (Word64)
+
+import           Foreign.C.String                   (withCString)
+import           Foreign.C.Types                    (CBool (..), CSize (..))
+import           Foreign.ForeignPtr                 (ForeignPtr, newForeignPtr, withForeignPtr)
+import           Foreign.Ptr                        (Ptr, nullPtr)
+
+import           Language.Souffle.Internal.Bindings (ByteBuf, Relation, Souffle)
 import qualified Language.Souffle.Internal.Bindings as Bindings
-import Language.Souffle.Internal.Bindings
-  ( Souffle, Relation, ByteBuf )
-import Control.Exception (mask_)
+
+import           Prelude                            hiding (init)
 
 
 {- | Initializes a Souffle program.
