@@ -3,15 +3,20 @@ module Test.Language.Souffle.InterpretedSpec
   ( module Test.Language.Souffle.InterpretedSpec
   ) where
 
-import Test.Hspec (describe, it, parallel, shouldBe, shouldNotBe, Spec)
-import GHC.Generics (Generic)
-import Data.Maybe (fromJust, isJust)
-import Control.Monad.IO.Class (liftIO)
-import System.Directory (doesDirectoryExist, listDirectory)
-import System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
-import qualified Data.Array as A
-import qualified Data.Vector as V
+import           Control.Monad.IO.Class       (liftIO)
+
+import qualified Data.Array                   as A
+import           Data.Maybe                   (fromJust, isJust)
+import qualified Data.Vector                  as V
+
+import           GHC.Generics                 (Generic)
+
 import qualified Language.Souffle.Interpreted as Souffle
+
+import           System.Directory             (doesDirectoryExist, listDirectory)
+import           System.IO.Temp               (createTempDirectory, getCanonicalTemporaryDirectory)
+
+import           Test.Hspec                   (Spec, describe, it, parallel, shouldBe, shouldNotBe)
 
 
 data Path = Path

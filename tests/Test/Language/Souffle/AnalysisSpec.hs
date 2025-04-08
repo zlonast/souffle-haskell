@@ -2,15 +2,20 @@ module Test.Language.Souffle.AnalysisSpec
   ( module Test.Language.Souffle.AnalysisSpec
   ) where
 
-import Prelude hiding ((.), id)
-import Control.Arrow (returnA, Arrow(..))
-import Control.Category (Category(..))
-import Test.Hspec (describe, it, parallel, shouldBe, Spec)
-import Data.Profunctor (Profunctor(..))
-import GHC.Generics (Generic)
-import Control.Monad.IO.Class (MonadIO(..))
-import Language.Souffle.Analysis (Analysis, mkAnalysis, execAnalysis)
+import           Control.Arrow                (Arrow (..), returnA)
+import           Control.Category             (Category (..))
+import           Control.Monad.IO.Class       (MonadIO (..))
+
+import           Data.Profunctor              (Profunctor (..))
+
+import           GHC.Generics                 (Generic)
+
+import           Language.Souffle.Analysis    (Analysis, execAnalysis, mkAnalysis)
 import qualified Language.Souffle.Interpreted as Souffle
+
+import           Prelude                      hiding (id, (.))
+
+import           Test.Hspec                   (Spec, describe, it, parallel, shouldBe)
 
 data Path = Path
 

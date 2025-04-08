@@ -2,12 +2,15 @@ module Test.Language.Souffle.CompiledSpec
   ( module Test.Language.Souffle.CompiledSpec
   ) where
 
-import Test.Hspec (describe, it, parallel, shouldBe, Spec)
-import GHC.Generics (Generic)
-import Data.Maybe (fromJust, isJust)
-import qualified Data.Array as A
-import qualified Data.Vector as V
+import qualified Data.Array                as A
+import           Data.Maybe                (fromJust, isJust)
+import qualified Data.Vector               as V
+
+import           GHC.Generics              (Generic)
+
 import qualified Language.Souffle.Compiled as Souffle
+
+import           Test.Hspec                (Spec, describe, it, parallel, shouldBe)
 
 data Path = Path
 

@@ -4,26 +4,30 @@ module Test.Language.Souffle.MarshalSpec
   ( module Test.Language.Souffle.MarshalSpec
   ) where
 
-import Test.Hspec (Spec, describe, parallel, it, shouldBe)
-import Test.Hspec.Hedgehog (PropertyT, hedgehog, forAll, (===))
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
-import GHC.Generics (Generic)
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import Data.Text (Text)
-import Data.Int (Int32)
-import Data.Word (Word32)
-import Data.Maybe (fromJust)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad (join)
-import Language.Souffle.Marshal (Marshal)
-import qualified Language.Souffle.Marshal as Souffle
-import qualified Language.Souffle.Class as Souffle
-import qualified Language.Souffle.Compiled as Compiled
+import           Control.Monad                (join)
+import           Control.Monad.IO.Class       (liftIO)
+
+import           Data.Int                     (Int32)
+import           Data.Maybe                   (fromJust)
+import           Data.String                  (IsString)
+import           Data.Text                    (Text)
+import qualified Data.Text                    as T
+import qualified Data.Text.Lazy               as TL
+import           Data.Void                    (Void)
+import           Data.Word                    (Word32)
+
+import           GHC.Generics                 (Generic)
+
+import qualified Hedgehog.Gen                 as Gen
+import qualified Hedgehog.Range               as Range
+
+import qualified Language.Souffle.Class       as Souffle
+import qualified Language.Souffle.Compiled    as Compiled
 import qualified Language.Souffle.Interpreted as Interpreted
-import Data.String (IsString)
-import Data.Void (Void)
+import           Language.Souffle.Marshal     (Marshal)
+
+import           Test.Hspec                   (Spec, describe, it, parallel, shouldBe)
+import           Test.Hspec.Hedgehog          (PropertyT, forAll, hedgehog, (===))
 
 
 data Edge = Edge String String
@@ -57,7 +61,7 @@ data EdgeMixed = EdgeMixed Text Vertex
 data EdgeRecord
   = EdgeRecord
   { fromNode :: Text
-  , toNode :: Text
+  , toNode   :: Text
   } deriving stock (Eq, Show, Generic)
 
 data IntsAndStrings = IntsAndStrings Text Int32 Text
