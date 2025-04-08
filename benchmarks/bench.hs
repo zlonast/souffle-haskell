@@ -1,21 +1,20 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# OPTIONS_GHC -Wno-missing-kind-signatures #-}
-module Main ( main ) where
+module Main (main) where
 
-import Criterion.Main
+import           Control.DeepSeq           (NFData)
+import           Control.Monad             (replicateM_)
+import           Control.Monad.IO.Class    (MonadIO (..))
+
+import           Criterion.Main            (Benchmark, bench, bgroup, defaultMain, nfIO)
+
+import           Data.Int                  (Int32)
+import           Data.Proxy                (Proxy)
+import qualified Data.Text                 as T
+import qualified Data.Vector               as V
+import           Data.Word                 (Word32)
+
+import           GHC.Generics              (Generic)
+
 import qualified Language.Souffle.Compiled as S
-import qualified Data.Text as T
-import qualified Data.Vector as V
-import GHC.Generics
-import Data.Word
-import Data.Int
-import Control.Monad
-import Control.Monad.IO.Class
-import Control.DeepSeq
 
 
 data Benchmarks = Benchmarks
@@ -43,29 +42,38 @@ data FromDatalogStringFact
 instance S.Program Benchmarks where
   type ProgramFacts Benchmarks =
       '[NumbersFact, StringsFact, FromDatalogFact, FromDatalogStringFact]
+
+  programName :: Benchmarks -> String
   programName = const "bench"
 
 instance S.Fact NumbersFact where
   type FactDirection NumbersFact = 'S.InputOutput
+
+  factName :: Proxy NumbersFact -> String
   factName = const "numbers_fact"
 
 instance S.Fact StringsFact where
   type FactDirection StringsFact = 'S.InputOutput
+
+  factName :: Proxy StringsFact -> String
   factName = const "strings_fact"
 
 instance S.Fact FromDatalogFact where
   type FactDirection FromDatalogFact = 'S.InputOutput
+
+  factName :: Proxy FromDatalogFact -> String
   factName = const "from_datalog_fact"
 
 instance S.Fact FromDatalogStringFact where
   type FactDirection FromDatalogStringFact = 'S.InputOutput
+
+  factName :: Proxy FromDatalogStringFact -> String
   factName = const "from_datalog_string_fact"
 
 instance S.Marshal NumbersFact
 instance S.Marshal StringsFact
 instance S.Marshal FromDatalogFact
 instance S.Marshal FromDatalogStringFact
-
 
 -- TODO: fix cases with larger numbers (crashes due to large memory allocations?)
 main :: IO ()
@@ -109,7 +117,7 @@ roundTrip :: (S.ContainsInputFact Benchmarks a, S.ContainsOutputFact Benchmarks 
           => V.Vector a -> IO (V.Vector a)
 roundTrip vec = S.runSouffle Benchmarks $ \case
   Nothing -> do
-    liftIO $ print "Failed to load roundtrip benchmarks!"
+    liftIO $ putStrLn "Failed to load roundtrip benchmarks!"
     pure V.empty
   Just prog -> do
     S.addFacts prog vec
@@ -119,7 +127,7 @@ roundTrip vec = S.runSouffle Benchmarks $ \case
 
 serializeNumbers :: Int -> IO ()
 serializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
-  Nothing -> liftIO $ print "Failed to load serialize benchmarks!"
+  Nothing -> liftIO $ putStrLn "Failed to load serialize benchmarks!"
   Just prog ->
     replicateM_ iterationCount $ S.addFacts prog vec
     -- No run needed
@@ -127,7 +135,7 @@ serializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
 
 deserializeNumbers :: Int -> IO ()
 deserializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
-  Nothing -> liftIO $ print "Failed to load deserialize benchmarks!"
+  Nothing -> liftIO $ putStrLn "Failed to load deserialize benchmarks!"
   Just prog -> do
     S.run prog
     replicateM_ iterationCount $ do
@@ -136,7 +144,7 @@ deserializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
 
 serializeWithStrings :: Int -> IO ()
 serializeWithStrings iterationCount = S.runSouffle Benchmarks $ \case
-  Nothing -> liftIO $ print "Failed to load serialize benchmarks!"
+  Nothing -> liftIO $ putStrLn "Failed to load serialize benchmarks!"
   Just prog ->
     replicateM_ iterationCount $ S.addFacts prog vec
     -- No run needed
@@ -144,7 +152,7 @@ serializeWithStrings iterationCount = S.runSouffle Benchmarks $ \case
 
 deserializeWithStrings :: Int -> IO ()
 deserializeWithStrings iterationCount = S.runSouffle Benchmarks $ \case
-  Nothing -> liftIO $ print "Failed to load deserialize benchmarks!"
+  Nothing -> liftIO $ putStrLn "Failed to load deserialize benchmarks!"
   Just prog -> do
     S.run prog
     replicateM_ iterationCount $ do
