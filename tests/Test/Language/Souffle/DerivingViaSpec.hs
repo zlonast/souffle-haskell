@@ -1,12 +1,10 @@
-{-# LANGUAGE UndecidableInstances, DataKinds, DeriveGeneric, DeriveAnyClass, DerivingVia #-}
-
 module Test.Language.Souffle.DerivingViaSpec
   ( module Test.Language.Souffle.DerivingViaSpec
   ) where
 
-import Test.Hspec
-import GHC.Generics
-import Data.Maybe
+import Test.Hspec (describe, it, shouldBe, Spec)
+import GHC.Generics (Generic)
+import Data.Maybe (fromJust)
 import qualified Language.Souffle.Interpreted as Souffle
 
 

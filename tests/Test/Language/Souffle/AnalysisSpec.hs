@@ -1,17 +1,15 @@
-{-# LANGUAGE DataKinds, TypeFamilies, DeriveGeneric, Arrows #-}
-
 module Test.Language.Souffle.AnalysisSpec
   ( module Test.Language.Souffle.AnalysisSpec
   ) where
 
 import Prelude hiding ((.), id)
-import Control.Arrow
-import Control.Category
-import Test.Hspec
-import Data.Profunctor
-import GHC.Generics
-import Control.Monad.IO.Class
-import Language.Souffle.Analysis
+import Control.Arrow (returnA, Arrow(..))
+import Control.Category (Category(..))
+import Test.Hspec (describe, it, parallel, shouldBe, Spec)
+import Data.Profunctor (Profunctor(..))
+import GHC.Generics (Generic)
+import Control.Monad.IO.Class (MonadIO(..))
+import Language.Souffle.Analysis (Analysis, mkAnalysis, execAnalysis)
 import qualified Language.Souffle.Interpreted as Souffle
 
 data Path = Path
@@ -187,7 +185,7 @@ spec = describe "composing analyses" $ parallel $ do
         let analysis :: Analysis Souffle.SouffleM Int Int
             analysis = arr (+1)
         result1 <- execAnalysis analysis 41
-        result2 <- execAnalysis (arr id) 41
+        result2 <- execAnalysis (arr id) (41 :: Integer)
         liftIO $ result1 `shouldBe` 42
         liftIO $ result2 `shouldBe` 41
 

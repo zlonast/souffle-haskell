@@ -1,23 +1,23 @@
-{-# LANGUAGE DeriveGeneric, TypeFamilies, DataKinds, RankNTypes #-}
-{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
+{-# OPTIONS_GHC -Wno-x-partial -Wno-unrecognised-warning-flags #-}
+{-# LANGUAGE NoPolyKinds #-}
 module Test.Language.Souffle.MarshalSpec
   ( module Test.Language.Souffle.MarshalSpec
   ) where
 
-import Test.Hspec
-import Test.Hspec.Hedgehog
+import Test.Hspec (Spec, describe, parallel, it, shouldBe)
+import Test.Hspec.Hedgehog (PropertyT, hedgehog, forAll, (===))
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import GHC.Generics
+import GHC.Generics (Generic)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import Data.Text
-import Data.Int
-import Data.Word
-import Data.Maybe ( fromJust )
-import Control.Monad.IO.Class ( liftIO )
-import Control.Monad
-import Language.Souffle.Marshal
+import Data.Text (Text)
+import Data.Int (Int32)
+import Data.Word (Word32)
+import Data.Maybe (fromJust)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad (join)
+import Language.Souffle.Marshal (Marshal)
 import qualified Language.Souffle.Marshal as Souffle
 import qualified Language.Souffle.Class as Souffle
 import qualified Language.Souffle.Compiled as Compiled
@@ -240,7 +240,7 @@ spec = describe "Marshalling" $ parallel $ do
   describe "Auto-deriving marshalling code" $
     it "can generate code for all instances in this file" $
       -- If this file compiles, then the test has already passed
-      42 `shouldBe` 42
+      42 `shouldBe` (42 :: Integer)
 
   roundTripSpecs
   edgeCaseSpecs

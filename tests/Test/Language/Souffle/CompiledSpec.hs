@@ -1,12 +1,10 @@
-{-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, DeriveGeneric #-}
-
 module Test.Language.Souffle.CompiledSpec
   ( module Test.Language.Souffle.CompiledSpec
   ) where
 
-import Test.Hspec
-import GHC.Generics
-import Data.Maybe
+import Test.Hspec (describe, it, parallel, shouldBe, Spec)
+import GHC.Generics (Generic)
+import Data.Maybe (fromJust, isJust)
 import qualified Data.Array as A
 import qualified Data.Vector as V
 import qualified Language.Souffle.Compiled as Souffle

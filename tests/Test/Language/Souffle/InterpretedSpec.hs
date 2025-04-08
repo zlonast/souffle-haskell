@@ -1,16 +1,14 @@
 
-{-# LANGUAGE ScopedTypeVariables, DataKinds, TypeFamilies, DeriveGeneric #-}
-
 module Test.Language.Souffle.InterpretedSpec
   ( module Test.Language.Souffle.InterpretedSpec
   ) where
 
-import Test.Hspec
-import GHC.Generics
-import Data.Maybe
+import Test.Hspec (describe, it, parallel, shouldBe, shouldNotBe, Spec)
+import GHC.Generics (Generic)
+import Data.Maybe (fromJust, isJust)
 import Control.Monad.IO.Class (liftIO)
-import System.Directory
-import System.IO.Temp
+import System.Directory (doesDirectoryExist, listDirectory)
+import System.IO.Temp (createTempDirectory, getCanonicalTemporaryDirectory)
 import qualified Data.Array as A
 import qualified Data.Vector as V
 import qualified Language.Souffle.Interpreted as Souffle
