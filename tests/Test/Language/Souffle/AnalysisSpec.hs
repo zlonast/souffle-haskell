@@ -26,15 +26,15 @@ data Reachable = Reachable String String
   deriving stock (Eq, Show, Generic)
 
 instance Souffle.Program Path where
-  type ProgramFacts Path = '[Edge, Reachable]
+  type ProgramFacts Path = [Edge, Reachable]
   programName = const "path"
 
 instance Souffle.Fact Edge where
-  type FactDirection Edge = 'Souffle.InputOutput
+  type FactDirection Edge = Souffle.InputOutput
   factName = const "edge"
 
 instance Souffle.Fact Reachable where
-  type FactDirection Reachable = 'Souffle.Output
+  type FactDirection Reachable = Souffle.Output
   factName = const "reachable"
 
 instance Souffle.Marshal Edge
@@ -65,7 +65,7 @@ instance Souffle.Program RoundTrip where
   programName = const "round_trip"
 
 instance Souffle.Fact StringFact where
-  type FactDirection StringFact = 'Souffle.InputOutput
+  type FactDirection StringFact = Souffle.InputOutput
 
   factName = const "string_fact"
 

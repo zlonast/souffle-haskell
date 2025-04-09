@@ -77,13 +77,13 @@ data Edge = Edge String String
   -- By making a data type an instance of Fact, we give Haskell the
   -- necessary information to bind to the datalog fact.
   deriving Souffle.Fact
-  via Souffle.FactOptions Edge "edge" 'Souffle.Input
+  via Souffle.FactOptions Edge "edge" Souffle.Input
 
 data Reachable = Reachable String String
   deriving stock (Eq, Show, Generic)
   deriving anyclass Souffle.Marshal
   deriving Souffle.Fact
-  via Souffle.FactOptions Reachable "reachable" 'Souffle.Output
+  via Souffle.FactOptions Reachable "reachable" Souffle.Output
 
 
 main :: IO ()

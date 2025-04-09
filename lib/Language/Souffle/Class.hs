@@ -187,7 +187,7 @@ class Marshal.Marshal a => Fact a where
 --   deriving (Eq, Show, Generic)
 --   deriving anyclass Souffle.Marshal
 --   deriving Souffle.Fact
---   via Souffle.FactOptions Edge "edge" 'Souffle.Input
+--   via Souffle.FactOptions Edge "edge" Souffle.Input
 -- @
 --
 -- See also: 'ProgramOptions'.

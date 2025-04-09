@@ -55,7 +55,7 @@ library
     TypeFamilies
     UndecidableInstances
   ghc-options: -Wall
-  cxx-options: -std=c++17
+  cxx-options: -std=c++17 -Wall
   include-dirs:
       cbits
       cbits/souffle

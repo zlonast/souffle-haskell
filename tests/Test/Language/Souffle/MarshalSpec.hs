@@ -116,35 +116,35 @@ newtype FloatFact = FloatFact Float
   deriving stock (Eq, Show, Generic)
 
 instance Souffle.Fact StringFact where
-  type FactDirection StringFact = 'Souffle.InputOutput
+  type FactDirection StringFact = Souffle.InputOutput
   factName = const "string_fact"
 
 instance Souffle.Fact TextFact where
-  type FactDirection TextFact = 'Souffle.InputOutput
+  type FactDirection TextFact = Souffle.InputOutput
   factName = const "string_fact"
 
 instance Souffle.Fact LazyTextFact where
-  type FactDirection LazyTextFact = 'Souffle.InputOutput
+  type FactDirection LazyTextFact = Souffle.InputOutput
   factName = const "string_fact"
 
 instance Souffle.Fact Int32Fact where
-  type FactDirection Int32Fact = 'Souffle.InputOutput
+  type FactDirection Int32Fact = Souffle.InputOutput
   factName = const "number_fact"
 
 instance Souffle.Fact Word32Fact where
-  type FactDirection Word32Fact = 'Souffle.InputOutput
+  type FactDirection Word32Fact = Souffle.InputOutput
   factName = const "unsigned_fact"
 
 instance Souffle.Fact FloatFact where
-  type FactDirection FloatFact = 'Souffle.InputOutput
+  type FactDirection FloatFact = Souffle.InputOutput
   factName = const "float_fact"
 
 instance Souffle.Fact NestedNewtype where
-  type FactDirection NestedNewtype = 'Souffle.InputOutput
+  type FactDirection NestedNewtype = Souffle.InputOutput
   factName = const "large_record"
 
 instance Souffle.Fact NestedRecord where
-  type FactDirection NestedRecord = 'Souffle.InputOutput
+  type FactDirection NestedRecord = Souffle.InputOutput
   factName = const "large_record"
 
 instance Souffle.Marshal StringFact
@@ -156,7 +156,7 @@ instance Souffle.Marshal FloatFact
 
 instance Souffle.Program RoundTrip where
   type ProgramFacts RoundTrip =
-    '[StringFact, TextFact, LazyTextFact, Int32Fact, Word32Fact, FloatFact, NestedNewtype, NestedRecord]
+    [StringFact, TextFact, LazyTextFact, Int32Fact, Word32Fact, FloatFact, NestedNewtype, NestedRecord]
   programName = const "round_trip"
 
 type RoundTripAction
@@ -164,6 +164,7 @@ type RoundTripAction
   => Souffle.ContainsInputFact RoundTrip a
   => Souffle.ContainsOutputFact RoundTrip a
   => Compiled.Submit a
+  => Show a
   => a -> PropertyT IO a
 
 
@@ -186,7 +187,7 @@ data NoStrings a = NoStrings Word32 Int32 Float
 
 instance Souffle.Program EdgeCases where
   type ProgramFacts EdgeCases =
-    '[ EmptyStrings String, EmptyStrings T.Text, EmptyStrings TL.Text
+    [ EmptyStrings String, EmptyStrings T.Text, EmptyStrings TL.Text
     , LongStrings String, LongStrings T.Text, LongStrings TL.Text
     , Unicode String, Unicode T.Text, Unicode TL.Text
     , NoStrings Void
@@ -194,37 +195,37 @@ instance Souffle.Program EdgeCases where
   programName = const "edge_cases"
 
 instance Souffle.Fact (EmptyStrings String) where
-  type FactDirection (EmptyStrings String) = 'Souffle.InputOutput
+  type FactDirection (EmptyStrings String) = Souffle.InputOutput
   factName = const "empty_strings"
 instance Souffle.Fact (EmptyStrings T.Text) where
-  type FactDirection (EmptyStrings T.Text) = 'Souffle.InputOutput
+  type FactDirection (EmptyStrings T.Text) = Souffle.InputOutput
   factName = const "empty_strings"
 instance Souffle.Fact (EmptyStrings TL.Text) where
-  type FactDirection (EmptyStrings TL.Text) = 'Souffle.InputOutput
+  type FactDirection (EmptyStrings TL.Text) = Souffle.InputOutput
   factName = const "empty_strings"
 
 instance Souffle.Fact (LongStrings String) where
-  type FactDirection (LongStrings String) = 'Souffle.InputOutput
+  type FactDirection (LongStrings String) = Souffle.InputOutput
   factName = const "long_strings"
 instance Souffle.Fact (LongStrings T.Text) where
-  type FactDirection (LongStrings T.Text) = 'Souffle.InputOutput
+  type FactDirection (LongStrings T.Text) = Souffle.InputOutput
   factName = const "long_strings"
 instance Souffle.Fact (LongStrings TL.Text) where
-  type FactDirection (LongStrings TL.Text) = 'Souffle.InputOutput
+  type FactDirection (LongStrings TL.Text) = Souffle.InputOutput
   factName = const "long_strings"
 
 instance Souffle.Fact (Unicode String) where
-  type FactDirection (Unicode String) = 'Souffle.InputOutput
+  type FactDirection (Unicode String) = Souffle.InputOutput
   factName = const "unicode"
 instance Souffle.Fact (Unicode T.Text) where
-  type FactDirection (Unicode T.Text) = 'Souffle.InputOutput
+  type FactDirection (Unicode T.Text) = Souffle.InputOutput
   factName = const "unicode"
 instance Souffle.Fact (Unicode TL.Text) where
-  type FactDirection (Unicode TL.Text) = 'Souffle.InputOutput
+  type FactDirection (Unicode TL.Text) = Souffle.InputOutput
   factName = const "unicode"
 
 instance Souffle.Fact (NoStrings a) where
-  type FactDirection (NoStrings _) = 'Souffle.InputOutput
+  type FactDirection (NoStrings _) = Souffle.InputOutput
   factName = const "no_strings"
 
 instance Marshal (EmptyStrings String)

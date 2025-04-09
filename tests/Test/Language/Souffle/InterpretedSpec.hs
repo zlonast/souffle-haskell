@@ -32,11 +32,11 @@ data Reachable = Reachable String String
   deriving stock (Eq, Show, Generic)
 
 instance Souffle.Fact Edge where
-  type FactDirection Edge = 'Souffle.InputOutput
+  type FactDirection Edge = Souffle.InputOutput
   factName = const "edge"
 
 instance Souffle.Fact Reachable where
-  type FactDirection Reachable = 'Souffle.Output
+  type FactDirection Reachable = Souffle.Output
   factName = const "reachable"
 
 instance Souffle.Marshal Edge

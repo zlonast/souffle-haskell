@@ -105,7 +105,6 @@ runSouffle :: forall prog a. Program prog
 runSouffle !prog !action =
   let progName = programName prog
       (SouffleM result) = do
-        liftIO $ putStrLn "runSouffle: start"
         maybeHandle <- liftIO (Internal.init progName) >>= \case
           Nothing -> pure Nothing
           Just souffleHandle -> do
@@ -113,7 +112,6 @@ runSouffle !prog !action =
               ptr <- newForeignPtr_ nullPtr
               newMVar $ BufData ptr 0
             pure $ Just $ Handle souffleHandle bufData
-        liftIO $ putStrLn "runSouffle: action"
         action maybeHandle
    in result
 {-# INLINABLE runSouffle #-}
@@ -383,15 +381,8 @@ instance MonadSouffle SouffleM where
           => Handle prog -> a -> SouffleM ()
   addFact (Handle !prog !bufVar) !fact = liftIO $ do
     let relationName = factName (Proxy :: Proxy a)
-    liftIO $ putStrLn "addFact: start"
     relation <- Internal.getRelation prog relationName
-    liftIO $ putStrLn "addFact: relation"
-    liftIO $ putStrLn "relation: "
-    liftIO $ print relation
-    liftIO $ putStrLn "fact: "
-    liftIO $ print fact
     writeBytes bufVar relation (Identity fact)
-    liftIO $ putStrLn "addFact: end"
   {-# INLINABLE addFact #-}
 
   addFacts :: forall t a prog. (Foldable t, Fact a, ContainsInputFact prog a, Submit a)
