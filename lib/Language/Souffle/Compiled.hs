@@ -62,6 +62,7 @@ import qualified Language.Souffle.Internal        as Internal
 import           Language.Souffle.Marshal         (MonadPop (..), MonadPush (..))
 
 import           Prelude                          hiding (init)
+import Data.Word (Word64)
 
 type ByteCount :: Type
 type ByteCount = Int
@@ -101,7 +102,7 @@ type role SouffleM nominal
 -}
 runSouffle :: forall prog a. Program prog
            => prog -> (Maybe (Handle prog) -> SouffleM a) -> IO a
-runSouffle prog action =
+runSouffle !prog !action =
   let progName = programName prog
       (SouffleM result) = do
         liftIO $ putStrLn "runSouffle: start"
@@ -364,24 +365,31 @@ instance MonadSouffle SouffleM where
   type CollectFacts SouffleM c = Collect c
   type SubmitFacts SouffleM a = Submit a
 
+  run :: Handler SouffleM prog -> SouffleM ()
   run (Handle prog _) = SouffleM $ Internal.run prog
   {-# INLINABLE run #-}
 
+  setNumThreads :: Handler SouffleM prog -> Word64 -> SouffleM ()
   setNumThreads (Handle prog _) numCores =
     SouffleM $ Internal.setNumThreads prog numCores
   {-# INLINABLE setNumThreads #-}
 
+  getNumThreads :: Handler SouffleM prog -> SouffleM Word64
   getNumThreads (Handle prog _) =
     SouffleM $ Internal.getNumThreads prog
   {-# INLINABLE getNumThreads #-}
 
-  addFact :: forall a prog. (Fact a, ContainsInputFact prog a, Submit a)
+  addFact :: forall a prog. (Fact a, ContainsInputFact prog a, SubmitFacts SouffleM a, Show a)
           => Handle prog -> a -> SouffleM ()
-  addFact (Handle prog bufVar) fact = liftIO $ do
+  addFact (Handle !prog !bufVar) !fact = liftIO $ do
     let relationName = factName (Proxy :: Proxy a)
     liftIO $ putStrLn "addFact: start"
     relation <- Internal.getRelation prog relationName
     liftIO $ putStrLn "addFact: relation"
+    liftIO $ putStrLn "relation: "
+    liftIO $ print relation
+    liftIO $ putStrLn "fact: "
+    liftIO $ print fact
     writeBytes bufVar relation (Identity fact)
     liftIO $ putStrLn "addFact: end"
   {-# INLINABLE addFact #-}

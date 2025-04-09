@@ -268,7 +268,7 @@ class Monad m => MonadSouffle m where
            => Handler m prog -> a -> m (Maybe a)
 
   -- | Adds a fact to the program.
-  addFact :: (Fact a, ContainsInputFact prog a, SubmitFacts m a)
+  addFact :: (Fact a, ContainsInputFact prog a, SubmitFacts m a, Show a)
           => Handler m prog -> a -> m ()
 
   -- | Adds multiple facts to the program. This function could be implemented
@@ -303,7 +303,7 @@ instance MonadSouffle m => MonadSouffle (ReaderT r m) where
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
 
-  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (ReaderT r m) a)
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (ReaderT r m) a, Show a)
           => Handler (ReaderT r m) prog -> a -> ReaderT r m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
@@ -340,7 +340,7 @@ instance (Monoid w, MonadSouffle m) => MonadSouffle (WriterT w m) where
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
 
-  addFact :: (Monoid w, MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (WriterT w m) a)
+  addFact :: (Monoid w, MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (WriterT w m) a, Show a)
           => Handler (WriterT w m) prog -> a -> WriterT w m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
@@ -379,7 +379,7 @@ instance MonadSouffle m => MonadSouffle (LazyState.StateT s m) where
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
 
-  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (LazyState.StateT s m) a) =>
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (LazyState.StateT s m) a, Show a) =>
     Handler (LazyState.StateT s m) prog -> a -> LazyState.StateT s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
@@ -418,7 +418,7 @@ instance MonadSouffle m => MonadSouffle (StrictState.StateT s m) where
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
 
-  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (StrictState.StateT s m) a) =>
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (StrictState.StateT s m) a, Show a) =>
     Handler (StrictState.StateT s m) prog -> a -> StrictState.StateT s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
@@ -458,7 +458,7 @@ instance (MonadSouffle m, Monoid w) => MonadSouffle (LazyRWS.RWST r w s m) where
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
 
-  addFact :: (MonadSouffle m, Monoid w, Fact a, ContainsInputFact prog a, SubmitFacts (LazyRWS.RWST r w s m) a) =>
+  addFact :: (MonadSouffle m, Monoid w, Fact a, ContainsInputFact prog a, SubmitFacts (LazyRWS.RWST r w s m) a, Show a) =>
     Handler (LazyRWS.RWST r w s m) prog -> a -> LazyRWS.RWST r w s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
@@ -497,7 +497,7 @@ instance (MonadSouffle m, Monoid w) => MonadSouffle (StrictRWS.RWST r w s m) whe
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
 
-  addFact :: (MonadSouffle m, Monoid w, Fact a, ContainsInputFact prog a, SubmitFacts (StrictRWS.RWST r w s m) a) =>
+  addFact :: (MonadSouffle m, Monoid w, Fact a, ContainsInputFact prog a, SubmitFacts (StrictRWS.RWST r w s m) a, Show a) =>
     Handler (StrictRWS.RWST r w s m) prog -> a -> StrictRWS.RWST r w s m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
@@ -535,7 +535,7 @@ instance MonadSouffle m => MonadSouffle (ExceptT e m) where
   findFact prog = lift . findFact prog
   {-# INLINABLE findFact #-}
 
-  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (ExceptT e m) a) =>
+  addFact :: (MonadSouffle m, Fact a, ContainsInputFact prog a, SubmitFacts (ExceptT e m) a, Show a) =>
     Handler (ExceptT e m) prog -> a -> ExceptT e m ()
   addFact fact = lift . addFact fact
   {-# INLINABLE addFact #-}
