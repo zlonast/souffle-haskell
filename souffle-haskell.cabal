@@ -24,8 +24,8 @@ extra-source-files:
     cbits/souffle/**/*.h
     cbits/souffle.cpp
     cbits/souffle/LICENSE
-    souffle/*.h
-    souffle/**/*.h
+    souffle/src/include/souffle/*.h
+    souffle/src/include/souffle/**/*.h
 
 extra-doc-files:
     README.md
