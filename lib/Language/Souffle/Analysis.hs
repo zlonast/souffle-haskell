@@ -13,16 +13,21 @@ module Language.Souffle.Analysis
   , execAnalysis
   ) where
 
-import           Control.Arrow    (Arrow (..), ArrowChoice (..))
-import           Control.Category (Category (..))
-import           Control.Monad    ((>=>))
+import           Control.Applicative (Applicative (pure, (*>), (<*>)))
+import           Control.Arrow       (Arrow (..), ArrowChoice (..))
+import           Control.Category    (Category (..))
+import           Control.Monad       (Monad, (>=>))
 
-import           Data.Kind        (Type)
-import           Data.Profunctor  (Choice (..), Profunctor (..), Strong (..))
+import           Data.Either         (Either (..))
+import           Data.Function       (const, ($))
+import           Data.Functor        (Functor (..), (<$>))
+import           Data.Kind           (Type)
+import           Data.Monoid         (Monoid (..))
+import           Data.Profunctor     (Choice (..), Profunctor (..), Strong (..))
+import           Data.Semigroup      (Semigroup (..))
+import           Data.Tuple          (fst, snd)
 
-import           GHC.Tuple        (Tuple2, Unit)
-
-import           Prelude          hiding (id, (.))
+import           GHC.Tuple           (Tuple2, Unit)
 
 -- | Data type used to compose multiple Datalog programs. Composition is mainly
 --   done via the various type-classes implemented for this type.

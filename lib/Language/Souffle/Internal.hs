@@ -22,9 +22,15 @@ module Language.Souffle.Internal
   , containsFact
   ) where
 
+import           Control.Applicative                (Applicative (..), (<$>))
 import           Control.Exception                  (mask_)
 
+import           Data.Bool                          (Bool (..))
+import           Data.Eq                            (Eq (..))
+import           Data.Function                      (($), (.))
 import           Data.Functor                       ((<&>))
+import           Data.Maybe                         (Maybe (..))
+import           Data.String                        (String)
 import           Data.Word                          (Word64)
 
 import           Foreign.C.String                   (withCString)
@@ -37,7 +43,8 @@ import           GHC.Tuple                          (Unit)
 import           Language.Souffle.Internal.Bindings (ByteBuf, Relation, Souffle)
 import qualified Language.Souffle.Internal.Bindings as Bindings
 
-import           Prelude                            hiding (init)
+import           System.IO                          (FilePath, IO)
+
 
 
 {- | Initializes a Souffle program.

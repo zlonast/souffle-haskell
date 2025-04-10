@@ -24,22 +24,32 @@ module Language.Souffle.Compiled
   , runSouffle
   ) where
 
+import           Control.Applicative              (Applicative (..))
 import           Control.Concurrent               (MVar, modifyMVarMasked, modifyMVarMasked_, newMVar)
-import           Control.Monad                    (when)
+import           Control.Monad                    (Monad (..), when, (=<<))
 import           Control.Monad.IO.Class           (MonadIO (..))
 import           Control.Monad.State.Strict       (MonadState (..), StateT, evalStateT, gets, modify)
 
 import qualified Data.Array                       as A
 import qualified Data.Array.IO                    as A
 import qualified Data.Array.Unsafe                as A
+import           Data.Bool                        (otherwise)
 import qualified Data.ByteString                  as BS
 import qualified Data.ByteString.Unsafe           as BSU
-import           Data.Foldable                    (traverse_)
+import           Data.Eq                          (Eq (..))
+import           Data.Foldable                    (Foldable (..), traverse_)
+import           Data.Function                    (const, flip, ($), (.))
+import           Data.Functor                     (Functor, (<$>))
 import           Data.Functor.Identity            (Identity (..))
-import           Data.Int                         (Int32)
+import           Data.Int                         (Int, Int32)
 import           Data.Kind                        (Constraint, Type)
 import           Data.List                        (List)
+import           Data.Maybe                       (Maybe (..))
+import           Data.Monoid                      (Monoid, (<>))
+import           Data.Ord                         (Ord (..))
 import           Data.Proxy                       (Proxy (..))
+import           Data.Semigroup                   (Semigroup)
+import           Data.String                      (String)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Data.Text.Encoding               as TE
@@ -55,7 +65,11 @@ import           Foreign.ForeignPtr.Unsafe        (unsafeForeignPtrToPtr)
 import           Foreign.Ptr                      (Ptr, castPtr, nullPtr, plusPtr)
 import qualified Foreign.Storable                 as S
 
+import           GHC.Err                          (error)
+import           GHC.Float                        (Float)
 import           GHC.Generics                     (Generic (..), K1, M1, type (:*:))
+import           GHC.Num                          (Num (..))
+import           GHC.Real                         (fromIntegral)
 import           GHC.Tuple                        (Unit)
 
 import           Language.Souffle.Class           (ContainsInputFact, ContainsOutputFact, Direction (..), Fact (..),
@@ -64,7 +78,11 @@ import           Language.Souffle.Class           (ContainsInputFact, ContainsOu
 import qualified Language.Souffle.Internal        as Internal
 import           Language.Souffle.Marshal         (MonadPop (..), MonadPush (..))
 
-import           Prelude                          hiding (init)
+import           Prelude                          (($!))
+
+import           System.IO                        (FilePath, IO)
+
+import           Text.Show                        (Show)
 
 type ByteCount :: Type
 type ByteCount = Int

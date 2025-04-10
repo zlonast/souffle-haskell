@@ -2,13 +2,18 @@ module Test.Language.Souffle.DerivingViaSpec
   ( module Test.Language.Souffle.DerivingViaSpec
   ) where
 
+import           Data.Eq                      (Eq)
+import           Data.Function                (($))
 import           Data.Maybe                   (fromJust)
+import           Data.String                  (String)
 
 import           GHC.Generics                 (Generic)
 
 import qualified Language.Souffle.Interpreted as Souffle
 
 import           Test.Hspec                   (Spec, describe, it, shouldBe)
+
+import           Text.Show                    (Show)
 
 
 data Path = Path

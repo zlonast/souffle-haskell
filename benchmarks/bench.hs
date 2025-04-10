@@ -1,22 +1,30 @@
 module Main (main) where
 
+import           Control.Applicative       (Applicative (..))
 import           Control.DeepSeq           (NFData)
 import           Control.Monad             (replicateM_)
 import           Control.Monad.IO.Class    (MonadIO (..))
 
 import           Criterion.Main            (Benchmark, bench, bgroup, defaultMain, nfIO)
 
-import           Data.Int                  (Int32)
-import           Data.List                 (List)
+import           Data.Function             (const, ($))
+import           Data.Int                  (Int, Int32)
+import           Data.List                 (List, (++))
+import           Data.Maybe                (Maybe (..))
 import           Data.Proxy                (Proxy)
+import           Data.String               (String)
 import qualified Data.Text                 as T
 import qualified Data.Vector               as V
 import           Data.Word                 (Word32)
 
+import           GHC.Float                 (Float)
 import           GHC.Generics              (Generic)
+import           GHC.Real                  (fromIntegral)
 import           GHC.Tuple                 (Unit)
 
 import qualified Language.Souffle.Compiled as S
+
+import           System.IO                 (IO, putStrLn)
 
 
 data Benchmarks = Benchmarks

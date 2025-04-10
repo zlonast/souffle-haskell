@@ -51,10 +51,11 @@ library
     DefaultSignatures
     DeriveAnyClass
     DerivingVia
+    NoListTuplePuns
+    NoImplicitPrelude
     OverloadedStrings
     TypeFamilies
     UndecidableInstances
-    NoListTuplePuns
   ghc-options: -Wall
   cxx-options: -std=c++17 -Wall
   include-dirs:
@@ -95,10 +96,11 @@ test-suite souffle-haskell-test
     DefaultSignatures
     DeriveAnyClass
     DerivingVia
+    NoListTuplePuns
+    NoImplicitPrelude
     OverloadedStrings
     TypeFamilies
     UndecidableInstances
-    NoListTuplePuns
   ghc-options: -Wall
   cxx-options: -std=c++17 -D__EMBEDDED_SOUFFLE__
   include-dirs:
@@ -134,10 +136,11 @@ benchmark souffle-haskell-benchmarks
     DefaultSignatures
     DeriveAnyClass
     DerivingVia
+    NoListTuplePuns
+    NoImplicitPrelude
     OverloadedStrings
     TypeFamilies
     UndecidableInstances
-    NoListTuplePuns
   ghc-options: -Wall
   cxx-options: -std=c++17 -D__EMBEDDED_SOUFFLE__ -std=c++17 -march=native
   include-dirs:

@@ -26,27 +26,38 @@ module Language.Souffle.Interpreted
   , souffleStdErr
   ) where
 
+import           Control.Applicative        (Applicative (..))
 import           Control.DeepSeq            (deepseq)
 import           Control.Exception          (ErrorCall (..), bracket, throwIO)
-import           Control.Monad              (forM, forM_, (<$!>))
+import           Control.Monad              (Monad (..), forM, forM_, (<$!>))
 import           Control.Monad.IO.Class     (MonadIO (..))
 import           Control.Monad.State.Strict (MonadState (state), State, evalState, execState, modify)
 
 import qualified Data.Array                 as A
-import           Data.Foldable              (traverse_)
-import           Data.Int                   (Int32)
+import           Data.Bool                  (Bool (False, True))
+import           Data.Char                  (Char)
+import           Data.Eq                    (Eq ((==)))
+import           Data.Foldable              (Foldable (..), traverse_)
+import           Data.Function              (($), (.))
+import           Data.Functor               (Functor (..), (<$>))
+import           Data.Int                   (Int, Int32)
 import           Data.IORef                 (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import           Data.Kind                  (Constraint, Type)
-import           Data.List                  (List)
+import           Data.List                  (List, break, drop, reverse, (++))
 import qualified Data.List                  as List hiding (init)
-import           Data.Maybe                 (fromMaybe)
+import           Data.Maybe                 (Maybe (..), fromMaybe, maybe)
+import           Data.Monoid                (Monoid (..), (<>))
 import           Data.Proxy                 (Proxy (..))
-import           Data.Semigroup             (Last (..))
+import           Data.Semigroup             (Last (..), Semigroup)
+import           Data.String                (String, lines, words)
 import qualified Data.Text                  as T
 import qualified Data.Vector                as V
 import           Data.Word                  (Word32, Word64)
 
 import           GHC.Classes                (CUnit)
+import           GHC.Err                    (error)
+import           GHC.Float                  (Float)
+import           GHC.Num                    (Num (..))
 import           GHC.Tuple                  (Unit)
 
 import           Language.Souffle.Class     (ContainsInputFact, ContainsOutputFact, Direction (..), Fact (..),
@@ -54,18 +65,20 @@ import           Language.Souffle.Class     (ContainsInputFact, ContainsOutputFa
                                              ProgramOptions (..))
 import           Language.Souffle.Marshal   (MonadPop (..), MonadPush (..))
 
-import           Prelude                    hiding (init)
+import           Prelude                    (($!))
 
 import           System.Directory           (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
 import           System.Environment         (lookupEnv)
 import           System.Exit                (ExitCode (..))
-import           System.FilePath            ((<.>), (</>))
-import           System.IO                  (hClose, hGetContents)
+import           System.FilePath            (FilePath, (<.>), (</>))
+import           System.IO                  (IO, appendFile, hClose, hGetContents, readFile)
 import           System.IO.Temp             (createTempDirectory, getCanonicalTemporaryDirectory)
 import           System.Process             (CreateProcess (..), StdStream (..), createProcess, createProcess_, shell,
                                              waitForProcess)
 
 import           Text.Printf                (printf)
+import           Text.Read                  (read)
+import           Text.Show                  (Show (..))
 
 
 -- | A monad for executing Souffle-related actions in.
@@ -278,7 +291,7 @@ instance Collect List where
   collect :: Marshal a => FilePath -> IO (List a)
   collect factFile = do
     factLines <- readCSVFile factFile
-    let facts = map (popMarshalT pop) factLines
+    let facts = fmap (popMarshalT pop) factLines
     pure $! facts
   {-# INLINABLE collect #-}
 
@@ -379,7 +392,7 @@ instance MonadSouffle SouffleM where
     handle <- readIORef $ handleData h
     let relationName = factName (Proxy :: Proxy a)
     let factFile = factPath handle </> relationName <.> "facts"
-    let factLines = map (pushMarshalT . push) (foldMap pure facts)
+    let factLines = fmap @List (pushMarshalT . push) (foldMap pure facts)
     traverse_ (\line -> appendFile factFile (List.intercalate "\t" line ++ "\n")) factLines
   {-# INLINABLE addFacts #-}
 
@@ -410,7 +423,7 @@ readCSVFile path = doesFileExist path >>= \case
   True -> do
     contents <- readFile path
     -- deepseq needed to avoid issues with lazy IO
-    pure $ contents `deepseq` (map (splitOn '\t') . lines) contents
+    pure $ contents `deepseq` (fmap (splitOn '\t') . lines) contents
 {-# INLINABLE readCSVFile #-}
 
 -- | Returns the handle of stdout from the souffle interpreter.

@@ -4,21 +4,31 @@ module Test.Language.Souffle.MarshalSpec
   ( module Test.Language.Souffle.MarshalSpec
   ) where
 
+import           Control.Applicative          (Applicative (..))
 import           Control.Monad                (join)
 import           Control.Monad.IO.Class       (liftIO)
 
+import           Data.Bool                    (Bool (True))
+import           Data.Enum                    (Bounded (..))
+import           Data.Eq                      (Eq)
+import           Data.Function                (const, ($))
+import           Data.Functor                 ((<$>))
 import           Data.Int                     (Int32)
 import           Data.List                    (List)
-import           Data.Maybe                   (fromJust)
+import           Data.Maybe                   (Maybe (..), fromJust)
+import           Data.Ord                     (Ord (..))
 import           Data.Proxy                   (Proxy)
-import           Data.String                  (IsString)
+import           Data.String                  (IsString, String)
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
 import qualified Data.Text.Lazy               as TL
 import           Data.Void                    (Void)
 import           Data.Word                    (Word32)
 
+import           GHC.Float                    (Float)
 import           GHC.Generics                 (Generic)
+import           GHC.Integer                  (Integer)
+import           GHC.Num                      (Num (..))
 import           GHC.Tuple                    (Tuple3)
 
 import qualified Hedgehog.Gen                 as Gen
@@ -29,8 +39,14 @@ import qualified Language.Souffle.Compiled    as Compiled
 import qualified Language.Souffle.Interpreted as Interpreted
 import           Language.Souffle.Marshal     (Marshal)
 
+import qualified Prelude                      as Prelude
+
+import           System.IO                    (IO)
+
 import           Test.Hspec                   (Spec, describe, it, parallel, shouldBe)
 import           Test.Hspec.Hedgehog          (PropertyT, forAll, hedgehog, (===))
+
+import           Text.Show                    (Show)
 
 
 

@@ -26,7 +26,7 @@ import           Foreign.Ptr      (FunPtr, Ptr)
 
 import           GHC.Tuple        (Unit)
 
-import           Prelude          hiding (init)
+import           System.IO        (IO)
 
 
 -- | A void type, used for tagging a pointer that points to an embedded

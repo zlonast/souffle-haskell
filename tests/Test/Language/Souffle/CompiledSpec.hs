@@ -2,10 +2,21 @@ module Test.Language.Souffle.CompiledSpec
   ( module Test.Language.Souffle.CompiledSpec
   ) where
 
+import           Control.Applicative       (Applicative (..))
+
 import qualified Data.Array                as A
+import           Data.Bool                 (Bool (..))
+import           Data.Eq                   (Eq)
+import           Data.Foldable             (Foldable (..))
+import           Data.Function             (const, ($))
+import           Data.Functor              ((<$>))
+import           Data.Int                  (Int)
 import           Data.List                 (List)
-import           Data.Maybe                (fromJust, isJust)
+import           Data.Maybe                (Maybe (..), fromJust, isJust)
+import           Data.Monoid               (Monoid (..))
 import           Data.Proxy                (Proxy)
+import           Data.Semigroup            (Semigroup (..))
+import           Data.String               (String)
 import qualified Data.Vector               as V
 
 import           GHC.Generics              (Generic)
@@ -13,6 +24,8 @@ import           GHC.Generics              (Generic)
 import qualified Language.Souffle.Compiled as Souffle
 
 import           Test.Hspec                (Spec, describe, it, parallel, shouldBe)
+
+import           Text.Show                 (Show)
 
 data Path = Path
 

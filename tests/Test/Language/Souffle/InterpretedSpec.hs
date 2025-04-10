@@ -2,12 +2,21 @@ module Test.Language.Souffle.InterpretedSpec
   ( module Test.Language.Souffle.InterpretedSpec
   ) where
 
+import           Control.Applicative          (Applicative (..))
 import           Control.Monad.IO.Class       (liftIO)
 
 import qualified Data.Array                   as A
+import           Data.Bool                    (Bool (..))
+import           Data.Eq                      (Eq)
+import           Data.Foldable                (Foldable (..))
+import           Data.Function                (const, ($), (.))
+import           Data.Int                     (Int)
 import           Data.List                    (List)
-import           Data.Maybe                   (fromJust, isJust)
+import           Data.Maybe                   (Maybe (..), fromJust, isJust)
+import           Data.Monoid                  (Monoid (..))
 import           Data.Proxy                   (Proxy)
+import           Data.Semigroup               (Semigroup (..))
+import           Data.String                  (String)
 import qualified Data.Vector                  as V
 
 import           GHC.Generics                 (Generic)
@@ -15,9 +24,12 @@ import           GHC.Generics                 (Generic)
 import qualified Language.Souffle.Interpreted as Souffle
 
 import           System.Directory             (doesDirectoryExist, listDirectory)
+import           System.IO                    (FilePath, IO)
 import           System.IO.Temp               (createTempDirectory, getCanonicalTemporaryDirectory)
 
 import           Test.Hspec                   (Spec, describe, it, parallel, shouldBe, shouldNotBe)
+
+import           Text.Show                    (Show)
 
 data Path = Path
 

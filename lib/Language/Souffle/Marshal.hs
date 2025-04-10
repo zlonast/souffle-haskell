@@ -9,16 +9,23 @@ module Language.Souffle.Marshal
   , SimpleProduct
   ) where
 
-import           Data.Int       (Int32)
-import           Data.Kind      (Constraint, Type)
-import qualified Data.Text      as T
-import qualified Data.Text.Lazy as TL
-import           Data.Word      (Word32)
+import           Control.Applicative (Applicative (..))
+import           Control.Monad       (Monad)
 
-import           GHC.Classes    (CTuple2, CUnit)
-import           GHC.Generics   (Generic (..), K1 (..), M1 (..), U1, V1, type (:*:) (..), type (:+:))
-import           GHC.Tuple      (Unit)
-import           GHC.TypeLits   (ErrorMessage (..), TypeError)
+import           Data.Function       ((.))
+import           Data.Functor        ((<$>))
+import           Data.Int            (Int32)
+import           Data.Kind           (Constraint, Type)
+import           Data.String         (String)
+import qualified Data.Text           as T
+import qualified Data.Text.Lazy      as TL
+import           Data.Word           (Word32)
+
+import           GHC.Classes         (CTuple2, CUnit)
+import           GHC.Float           (Float)
+import           GHC.Generics        (Generic (..), K1 (..), M1 (..), U1, V1, type (:*:) (..), type (:+:))
+import           GHC.Tuple           (Unit)
+import           GHC.TypeLits        (ErrorMessage (..), TypeError)
 
 {- | A typeclass for serializing primitive values from Haskell to Datalog.
 

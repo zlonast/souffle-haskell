@@ -24,6 +24,7 @@ module Language.Souffle.Class
   , MonadSouffleFileIO(..)
   ) where
 
+import           Control.Monad              (Monad)
 import           Control.Monad.Except       (ExceptT)
 import           Control.Monad.Reader       (MonadTrans (..), ReaderT)
 import qualified Control.Monad.RWS.Lazy     as LazyRWS
@@ -32,9 +33,16 @@ import qualified Control.Monad.State.Lazy   as LazyState
 import qualified Control.Monad.State.Strict as StrictState
 import           Control.Monad.Writer       (WriterT)
 
+import           Data.Eq                    (Eq)
+import           Data.Foldable              (Foldable)
+import           Data.Function              (const, ($), (.))
+import           Data.Functor               ((<$>))
 import           Data.Kind                  (Constraint, Type)
 import           Data.List                  (List)
+import           Data.Maybe                 (Maybe)
+import           Data.Monoid                (Monoid)
 import           Data.Proxy                 (Proxy (..))
+import           Data.String                (String)
 import           Data.Word                  (Word64)
 
 import           GHC.Classes                (CTuple2, CUnit)
@@ -43,7 +51,9 @@ import           GHC.TypeLits               (ErrorMessage (..), KnownSymbol, Sym
 
 import qualified Language.Souffle.Marshal   as Marshal
 
-import           Prelude                    hiding (init)
+import           System.FilePath            (FilePath)
+
+import           Text.Show                  (Show)
 
 
 -- | A helper type family for checking if a specific Souffle `Program` contains
