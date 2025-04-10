@@ -56,6 +56,9 @@ library
     OverloadedStrings
     TypeFamilies
     UndecidableInstances
+    TypeAbstractions
+    AllowAmbiguousTypes
+    RequiredTypeArguments
   ghc-options: -Wall
   cxx-options: -std=c++17 -Wall
   include-dirs:

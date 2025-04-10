@@ -8,7 +8,6 @@ import           Control.Monad.IO.Class       (MonadIO (..))
 
 import           Data.List                    (List)
 import           Data.Profunctor              (Profunctor (..))
-import           Data.Proxy                   (Proxy)
 
 import           GHC.Generics                 (Generic)
 import           GHC.Tuple                    (Tuple2, Unit)
@@ -37,14 +36,14 @@ instance Souffle.Program Path where
 instance Souffle.Fact Edge where
   type FactDirection Edge = Souffle.InputOutput
 
-  factName :: Proxy Edge -> String
-  factName = const "edge"
+  factName :: String
+  factName = "edge"
 
 instance Souffle.Fact Reachable where
   type FactDirection Reachable = Souffle.Output
 
-  factName :: Proxy Reachable -> String
-  factName = const "reachable"
+  factName :: String
+  factName = "reachable"
 
 instance Souffle.Marshal Edge
 instance Souffle.Marshal Reachable
@@ -77,8 +76,8 @@ instance Souffle.Program RoundTrip where
 instance Souffle.Fact StringFact where
   type FactDirection StringFact = Souffle.InputOutput
 
-  factName :: Proxy StringFact -> String
-  factName = const "string_fact"
+  factName :: String
+  factName = "string_fact"
 
 instance Souffle.Marshal StringFact
 

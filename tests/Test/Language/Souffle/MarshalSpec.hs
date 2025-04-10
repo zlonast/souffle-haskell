@@ -9,7 +9,7 @@ import           Control.Monad                (join)
 import           Control.Monad.IO.Class       (liftIO)
 
 import           Data.Bool                    (Bool (True))
-import           Data.Enum                    (Bounded (..))
+import           Data.Bounded                 (Bounded (..))
 import           Data.Eq                      (Eq)
 import           Data.Function                (const, ($))
 import           Data.Functor                 ((<$>))
@@ -17,7 +17,6 @@ import           Data.Int                     (Int32)
 import           Data.List                    (List)
 import           Data.Maybe                   (Maybe (..), fromJust)
 import           Data.Ord                     (Ord (..))
-import           Data.Proxy                   (Proxy)
 import           Data.String                  (IsString, String)
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
@@ -138,50 +137,50 @@ newtype FloatFact = FloatFact Float
 instance Souffle.Fact StringFact where
   type FactDirection StringFact = Souffle.InputOutput
 
-  factName :: Proxy StringFact -> String
-  factName = const "string_fact"
+  factName :: String
+  factName = "string_fact"
 
 instance Souffle.Fact TextFact where
   type FactDirection TextFact = Souffle.InputOutput
 
-  factName :: Proxy TextFact -> String
-  factName = const "string_fact"
+  factName :: String
+  factName = "string_fact"
 
 instance Souffle.Fact LazyTextFact where
   type FactDirection LazyTextFact = Souffle.InputOutput
 
-  factName :: Proxy LazyTextFact -> String
-  factName = const "string_fact"
+  factName :: String
+  factName = "string_fact"
 
 instance Souffle.Fact Int32Fact where
   type FactDirection Int32Fact = Souffle.InputOutput
 
-  factName :: Proxy Int32Fact -> String
-  factName = const "number_fact"
+  factName :: String
+  factName = "number_fact"
 
 instance Souffle.Fact Word32Fact where
   type FactDirection Word32Fact = Souffle.InputOutput
 
-  factName :: Proxy Word32Fact -> String
-  factName = const "unsigned_fact"
+  factName :: String
+  factName = "unsigned_fact"
 
 instance Souffle.Fact FloatFact where
   type FactDirection FloatFact = Souffle.InputOutput
 
-  factName :: Proxy FloatFact -> String
-  factName = const "float_fact"
+  factName :: String
+  factName = "float_fact"
 
 instance Souffle.Fact NestedNewtype where
   type FactDirection NestedNewtype = Souffle.InputOutput
 
-  factName :: Proxy NestedNewtype -> String
-  factName = const "large_record"
+  factName :: String
+  factName = "large_record"
 
 instance Souffle.Fact NestedRecord where
   type FactDirection NestedRecord = Souffle.InputOutput
 
-  factName :: Proxy NestedRecord -> String
-  factName = const "large_record"
+  factName :: String
+  factName = "large_record"
 
 instance Souffle.Marshal StringFact
 instance Souffle.Marshal TextFact
@@ -236,37 +235,57 @@ instance Souffle.Program EdgeCases where
 
 instance Souffle.Fact (EmptyStrings String) where
   type FactDirection (EmptyStrings String) = Souffle.InputOutput
-  factName = const "empty_strings"
+
+  factName :: String
+  factName = "empty_strings"
 instance Souffle.Fact (EmptyStrings T.Text) where
   type FactDirection (EmptyStrings T.Text) = Souffle.InputOutput
-  factName = const "empty_strings"
+
+  factName :: String
+  factName = "empty_strings"
 instance Souffle.Fact (EmptyStrings TL.Text) where
   type FactDirection (EmptyStrings TL.Text) = Souffle.InputOutput
-  factName = const "empty_strings"
+
+  factName :: String
+  factName = "empty_strings"
 
 instance Souffle.Fact (LongStrings String) where
   type FactDirection (LongStrings String) = Souffle.InputOutput
-  factName = const "long_strings"
+
+  factName :: String
+  factName = "long_strings"
 instance Souffle.Fact (LongStrings T.Text) where
   type FactDirection (LongStrings T.Text) = Souffle.InputOutput
-  factName = const "long_strings"
+
+  factName :: String
+  factName = "long_strings"
 instance Souffle.Fact (LongStrings TL.Text) where
   type FactDirection (LongStrings TL.Text) = Souffle.InputOutput
-  factName = const "long_strings"
+
+  factName :: String
+  factName = "long_strings"
 
 instance Souffle.Fact (Unicode String) where
   type FactDirection (Unicode String) = Souffle.InputOutput
-  factName = const "unicode"
+
+  factName :: String
+  factName = "unicode"
 instance Souffle.Fact (Unicode T.Text) where
   type FactDirection (Unicode T.Text) = Souffle.InputOutput
-  factName = const "unicode"
+
+  factName :: String
+  factName = "unicode"
 instance Souffle.Fact (Unicode TL.Text) where
   type FactDirection (Unicode TL.Text) = Souffle.InputOutput
-  factName = const "unicode"
+
+  factName :: String
+  factName = "unicode"
 
 instance Souffle.Fact (NoStrings a) where
   type FactDirection (NoStrings _) = Souffle.InputOutput
-  factName = const "no_strings"
+
+  factName :: String
+  factName = "no_strings"
 
 instance Marshal (EmptyStrings String)
 instance Marshal (EmptyStrings T.Text)

@@ -41,20 +41,18 @@ import           Data.Kind                  (Constraint, Type)
 import           Data.List                  (List)
 import           Data.Maybe                 (Maybe)
 import           Data.Monoid                (Monoid)
-import           Data.Proxy                 (Proxy (..))
 import           Data.String                (String)
 import           Data.Word                  (Word64)
 
 import           GHC.Classes                (CTuple2, CUnit)
 import           GHC.Tuple                  (Unit)
-import           GHC.TypeLits               (ErrorMessage (..), KnownSymbol, Symbol, TypeError, symbolVal)
+import           GHC.TypeLits               (ErrorMessage (..), KnownSymbol, Symbol, TypeError, symbolSing)
 
 import qualified Language.Souffle.Marshal   as Marshal
 
 import           System.FilePath            (FilePath)
 
-import           Text.Show                  (Show)
-
+import           Text.Show                  (Show(..))
 
 -- | A helper type family for checking if a specific Souffle `Program` contains
 --   a certain `Fact`. Additionally, it also checks if the fact is marked as
@@ -162,7 +160,7 @@ instance KnownSymbol progName => Program (ProgramOptions prog progName facts) wh
   type ProgramFacts (ProgramOptions _ _ facts) = facts
 
   programName :: KnownSymbol progName => ProgramOptions prog progName facts -> String
-  programName = const $ symbolVal (Proxy @progName)
+  programName = const $ show $ symbolSing @progName
   {-# INLINABLE programName #-}
 
 -- | A typeclass for data types representing a fact in datalog.
@@ -183,9 +181,7 @@ class Marshal.Marshal a => Fact a where
 
   -- | Function for obtaining the name of a fact
   --   (has to be the same as described in the Datalog program).
-  --
-  -- It uses a 'Proxy' to select the correct instance.
-  factName :: Proxy a -> String
+  factName :: String
 
 -- | A helper data type, used in combination with the DerivingVia extension to
 --   automatically generate code to bind a Haskell datatype to a Souffle
@@ -222,8 +218,8 @@ instance ( Marshal.Marshal fact
          ) => Fact (FactOptions fact name dir) where
   type FactDirection (FactOptions _ _ dir) = dir
 
-  factName :: (Marshal.Marshal fact, KnownSymbol name) => Proxy (FactOptions fact name dir) -> String
-  factName = const $ symbolVal (Proxy @name)
+  factName :: (Marshal.Marshal fact, KnownSymbol name) => String
+  factName = show $ symbolSing @name
   {-# INLINABLE factName #-}
 
 

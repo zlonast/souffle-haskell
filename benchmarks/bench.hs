@@ -11,7 +11,6 @@ import           Data.Function             (const, ($))
 import           Data.Int                  (Int, Int32)
 import           Data.List                 (List, (++))
 import           Data.Maybe                (Maybe (..))
-import           Data.Proxy                (Proxy)
 import           Data.String               (String)
 import qualified Data.Text                 as T
 import qualified Data.Vector               as V
@@ -58,26 +57,26 @@ instance S.Program Benchmarks where
 instance S.Fact NumbersFact where
   type FactDirection NumbersFact = 'S.InputOutput
 
-  factName :: Proxy NumbersFact -> String
-  factName = const "numbers_fact"
+  factName :: String
+  factName = "numbers_fact"
 
 instance S.Fact StringsFact where
   type FactDirection StringsFact = 'S.InputOutput
 
-  factName :: Proxy StringsFact -> String
-  factName = const "strings_fact"
+  factName :: String
+  factName = "strings_fact"
 
 instance S.Fact FromDatalogFact where
   type FactDirection FromDatalogFact = 'S.InputOutput
 
-  factName :: Proxy FromDatalogFact -> String
-  factName = const "from_datalog_fact"
+  factName :: String
+  factName = "from_datalog_fact"
 
 instance S.Fact FromDatalogStringFact where
   type FactDirection FromDatalogStringFact = 'S.InputOutput
 
-  factName :: Proxy FromDatalogStringFact -> String
-  factName = const "from_datalog_string_fact"
+  factName :: String
+  factName = "from_datalog_string_fact"
 
 instance S.Marshal NumbersFact
 instance S.Marshal StringsFact

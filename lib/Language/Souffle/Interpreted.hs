@@ -47,7 +47,6 @@ import           Data.List                  (List, break, drop, reverse, (++))
 import qualified Data.List                  as List hiding (init)
 import           Data.Maybe                 (Maybe (..), fromMaybe, maybe)
 import           Data.Monoid                (Monoid (..), (<>))
-import           Data.Proxy                 (Proxy (..))
 import           Data.Semigroup             (Last (..), Semigroup)
 import           Data.String                (String, lines, words)
 import qualified Data.Text                  as T
@@ -363,7 +362,7 @@ instance MonadSouffle SouffleM where
            => Handle prog -> SouffleM (c a)
   getFacts h = liftIO $ do
     handle <- readIORef $ handleData h
-    let relationName = factName (Proxy :: Proxy a)
+    let relationName = factName @a
     let factFile = outputPath handle </> relationName <.> "csv"
     facts <- collect factFile
     pure $! facts  -- force facts before running to avoid issues with lazy IO
@@ -380,7 +379,7 @@ instance MonadSouffle SouffleM where
           => Handle prog -> a -> SouffleM Unit
   addFact h fact = liftIO $ do
     handle <- readIORef $ handleData h
-    let relationName = factName (Proxy :: Proxy a)
+    let relationName = factName @a
     let factFile = factPath handle </> relationName <.> "facts"
     let line = pushMarshalT (push fact)
     appendFile factFile $ List.intercalate "\t" line ++ "\n"
@@ -390,7 +389,7 @@ instance MonadSouffle SouffleM where
            => Handle prog -> f a -> SouffleM Unit
   addFacts h facts = liftIO $ do
     handle <- readIORef $ handleData h
-    let relationName = factName (Proxy :: Proxy a)
+    let relationName = factName @a
     let factFile = factPath handle </> relationName <.> "facts"
     let factLines = fmap @List (pushMarshalT . push) (foldMap pure facts)
     traverse_ (\line -> appendFile factFile (List.intercalate "\t" line ++ "\n")) factLines

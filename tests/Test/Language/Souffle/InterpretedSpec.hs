@@ -14,7 +14,6 @@ import           Data.Int                     (Int)
 import           Data.List                    (List)
 import           Data.Maybe                   (Maybe (..), fromJust, isJust)
 import           Data.Monoid                  (Monoid (..))
-import           Data.Proxy                   (Proxy)
 import           Data.Semigroup               (Semigroup (..))
 import           Data.String                  (String)
 import qualified Data.Vector                  as V
@@ -46,14 +45,14 @@ data Reachable = Reachable String String
 instance Souffle.Fact Edge where
   type FactDirection Edge = Souffle.InputOutput
 
-  factName :: Proxy Edge -> String
-  factName = const "edge"
+  factName :: String
+  factName = "edge"
 
 instance Souffle.Fact Reachable where
   type FactDirection Reachable = Souffle.Output
 
-  factName :: Proxy Reachable -> String
-  factName = const "reachable"
+  factName :: String
+  factName = "reachable"
 
 instance Souffle.Marshal Edge
 instance Souffle.Marshal Reachable

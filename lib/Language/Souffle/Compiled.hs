@@ -38,7 +38,7 @@ import qualified Data.ByteString                  as BS
 import qualified Data.ByteString.Unsafe           as BSU
 import           Data.Eq                          (Eq (..))
 import           Data.Foldable                    (Foldable (..), traverse_)
-import           Data.Function                    (const, flip, ($), (.))
+import           Data.Function                    (flip, ($), (.))
 import           Data.Functor                     (Functor, (<$>))
 import           Data.Functor.Identity            (Identity (..))
 import           Data.Int                         (Int, Int32)
@@ -47,7 +47,6 @@ import           Data.List                        (List)
 import           Data.Maybe                       (Maybe (..))
 import           Data.Monoid                      (Monoid, (<>))
 import           Data.Ord                         (Ord (..))
-import           Data.Proxy                       (Proxy (..))
 import           Data.Semigroup                   (Semigroup)
 import           Data.String                      (String)
 import           Data.Text                        (Text)
@@ -401,7 +400,7 @@ instance MonadSouffle SouffleM where
   addFact :: forall a prog. (Fact a, ContainsInputFact prog a, SubmitFacts SouffleM a, Show a)
           => Handle prog -> a -> SouffleM Unit
   addFact (Handle !prog !bufVar) !fact = liftIO $ do
-    let relationName = factName (Proxy :: Proxy a)
+    let relationName = factName @a
     relation <- Internal.getRelation prog relationName
     writeBytes bufVar relation (Identity fact)
   {-# INLINABLE addFact #-}
@@ -409,7 +408,7 @@ instance MonadSouffle SouffleM where
   addFacts :: forall t a prog. (Foldable t, Fact a, ContainsInputFact prog a, Submit a)
            => Handle prog -> t a -> SouffleM Unit
   addFacts (Handle prog bufVar) facts = liftIO $ do
-    let relationName = factName (Proxy :: Proxy a)
+    let relationName = factName @a
     relation <- Internal.getRelation prog relationName
     writeBytes bufVar relation facts
   {-# INLINABLE addFacts #-}
@@ -417,7 +416,7 @@ instance MonadSouffle SouffleM where
   getFacts :: forall a c prog. (Fact a, ContainsOutputFact prog a, Collect c)
            => Handle prog -> SouffleM (c a)
   getFacts (Handle prog _) = SouffleM $ do
-    let relationName = factName (Proxy :: Proxy a)
+    let relationName = factName @a
     relation <- Internal.getRelation prog relationName
     buf <- withForeignPtr prog $ flip Internal.popFacts relation
     flip runMarshalFastM buf $ collect =<< popUInt32
@@ -426,9 +425,9 @@ instance MonadSouffle SouffleM where
   findFact :: forall a prog. (Fact a, ContainsOutputFact prog a, Submit a)
            => Handle prog -> a -> SouffleM (Maybe a)
   findFact (Handle prog bufVar) fact = SouffleM $ do
-    let relationName = factName (Proxy :: Proxy a)
+    let relationName = factName @a
     relation <- Internal.getRelation prog relationName
-    found <- case estimateNumBytes (Proxy @a) of
+    found <- case estimateNumBytes @a of
       Exact numBytes -> do
         modifyMVarMasked bufVar $ \bufData -> do
           bufData' <- if bufSize bufData > numBytes
@@ -471,60 +470,64 @@ instance Semigroup ByteSize where
   Estimated s1 <> Estimated s2 = Estimated (s1 + s2)
   {-# INLINABLE (<>) #-}
 
-type ToByteSize :: k -> Constraint
-class ToByteSize a where
-  toByteSize :: Proxy a -> ByteSize
+type ToByteSize :: forall k. k -> Constraint
+class ToByteSize @k a where
+  toByteSize :: ByteSize
 
 instance ToByteSize Int32 where
-  toByteSize :: Proxy Int32 -> ByteSize
-  toByteSize = const $ Exact 4
+  toByteSize :: ByteSize
+  toByteSize = Exact 4
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize Word32 where
-  toByteSize :: Proxy Word32 -> ByteSize
-  toByteSize = const $ Exact 4
+  toByteSize :: ByteSize
+  toByteSize = Exact 4
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize Float where
-  toByteSize :: Proxy Float -> ByteSize
-  toByteSize = const $ Exact 4
+  toByteSize :: ByteSize
+  toByteSize = Exact 4
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize String where
   -- 4 for length prefix + 32 for actual string
-  toByteSize :: Proxy String -> ByteSize
-  toByteSize = const $ Estimated 36
+  toByteSize :: ByteSize
+  toByteSize = Estimated 36
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize T.Text where
   -- 4 for length prefix + 32 for actual string
-  toByteSize :: Proxy T.Text -> ByteSize
-  toByteSize = const $ Estimated 36
+  toByteSize :: ByteSize
+  toByteSize = Estimated 36
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize TL.Text where
   -- 4 for length prefix + 32 for actual string
-  toByteSize :: Proxy TL.Text -> ByteSize
-  toByteSize = const $ Estimated 36
+  toByteSize :: ByteSize
+  toByteSize = Estimated 36
   {-# INLINABLE toByteSize #-}
 
 instance ToByteSize [] where
-  toByteSize :: Proxy [] -> ByteSize
-  toByteSize = const $ Exact 0
+  toByteSize :: ByteSize
+  toByteSize = Exact 0
   {-# INLINABLE toByteSize #-}
 
-instance (ToByteSize a, ToByteSize as) => ToByteSize (a : as) where
-  toByteSize :: (ToByteSize a2, ToByteSize as) => Proxy (a2 : as) -> ByteSize
-  toByteSize =
-    const $ toByteSize (Proxy @a) <> toByteSize (Proxy @as)
+instance ToByteSize List where
+  toByteSize :: ByteSize
+  toByteSize = Exact 0
+  {-# INLINABLE toByteSize #-}
+
+instance (ToByteSize a, ToByteSize as) => ToByteSize @(List Type) (a : as) where
+  toByteSize :: ByteSize
+  toByteSize = toByteSize @Type @a <> toByteSize @(List Type) @as
   {-# INLINABLE toByteSize #-}
 
 -- | A helper type family, for getting all directly marshallable fields of a type.
 type GetFields :: k -> List Type
 type family GetFields a where
-  GetFields (K1 _ a) = DoGetFields a
+  GetFields (K1 _ a)   = DoGetFields a
   GetFields (M1 _ _ a) = GetFields a
-  GetFields (f :*: g) = GetFields f ++ GetFields g
+  GetFields (f :*: g)  = GetFields f ++ GetFields g
 
 type DoGetFields :: Type -> List Type
 type family DoGetFields a where
@@ -541,13 +544,13 @@ type family a ++ b where
   [] ++ b = b
   (a : as) ++ bs = a : as ++ bs
 
-estimateNumBytes :: forall a. Submit a => Proxy a -> ByteSize
-estimateNumBytes _ = toByteSize (Proxy @(GetFields (Rep a)))
+estimateNumBytes :: forall a. Submit a => ByteSize
+estimateNumBytes = toByteSize @(List Type) @(GetFields (Rep a))
 {-# INLINABLE estimateNumBytes #-}
 
 writeBytes :: forall f a. (Foldable f, Marshal a, Submit a)
            => MVar BufData -> Ptr Internal.Relation -> f a -> IO Unit
-writeBytes bufVar relation fa = case estimateNumBytes (Proxy @a) of
+writeBytes bufVar relation fa = case estimateNumBytes @a of
   Exact numBytes -> modifyMVarMasked_ bufVar $ \bufData -> do
     let totalByteCount = numBytes * objCount
     bufData' <- if bufSize bufData > totalByteCount
