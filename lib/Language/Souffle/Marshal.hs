@@ -15,7 +15,9 @@ import qualified Data.Text      as T
 import qualified Data.Text.Lazy as TL
 import           Data.Word      (Word32)
 
+import           GHC.Classes    (CTuple2, CUnit)
 import           GHC.Generics   (Generic (..), K1 (..), M1 (..), U1, V1, type (:*:) (..), type (:+:))
+import           GHC.Tuple      (Unit)
 import           GHC.TypeLits   (ErrorMessage (..), TypeError)
 
 {- | A typeclass for serializing primitive values from Haskell to Datalog.
@@ -27,15 +29,15 @@ See also: 'MonadPop', 'Marshal'.
 type MonadPush :: (Type -> Type) -> Constraint
 class Monad m => MonadPush m where
   -- | Marshals a signed 32 bit integer to the datalog side.
-  pushInt32 :: Int32 -> m ()
+  pushInt32 :: Int32 -> m Unit
   -- | Marshals an unsigned 32 bit integer to the datalog side.
-  pushUInt32 :: Word32 -> m ()
+  pushUInt32 :: Word32 -> m Unit
   -- | Marshals a float to the datalog side.
-  pushFloat :: Float -> m ()
+  pushFloat :: Float -> m Unit
   -- | Marshals a string to the datalog side.
-  pushString :: String -> m ()
+  pushString :: String -> m Unit
   -- | Marshals a UTF8-encoded Text string to the datalog side.
-  pushText :: T.Text -> m ()
+  pushText :: T.Text -> m Unit
 
 {- | A typeclass for serializing primitive values from Datalog to Haskell.
 
@@ -80,13 +82,13 @@ instance Marshal Edge
 type Marshal :: Type -> Constraint
 class Marshal a where
   -- | Marshals a value to the datalog side.
-  push :: MonadPush m => a -> m ()
+  push :: MonadPush m => a -> m Unit
   -- | Unmarshals a value from the datalog side.
   pop :: MonadPop m => m a
 
   default push
     :: (Generic a, SimpleProduct a, GMarshal (Rep a), MonadPush m)
-    => a -> m ()
+    => a -> m Unit
   default pop
     :: (Generic a, SimpleProduct a, GMarshal (Rep a), MonadPop m)
     => m a
@@ -97,7 +99,7 @@ class Marshal a where
   {-# INLINABLE pop #-}
 
 instance Marshal Int32 where
-  push :: MonadPush m => Int32 -> m ()
+  push :: MonadPush m => Int32 -> m Unit
   push = pushInt32
   {-# INLINABLE push #-}
 
@@ -106,7 +108,7 @@ instance Marshal Int32 where
   {-# INLINABLE pop #-}
 
 instance Marshal Word32 where
-  push :: MonadPush m => Word32 -> m ()
+  push :: MonadPush m => Word32 -> m Unit
   push = pushUInt32
   {-# INLINABLE push #-}
 
@@ -115,7 +117,7 @@ instance Marshal Word32 where
   {-# INLINABLE pop #-}
 
 instance Marshal Float where
-  push :: MonadPush m => Float -> m ()
+  push :: MonadPush m => Float -> m Unit
   push = pushFloat
   {-# INLINABLE push #-}
 
@@ -124,7 +126,7 @@ instance Marshal Float where
   {-# INLINABLE pop #-}
 
 instance Marshal String where
-  push :: MonadPush m => String -> m ()
+  push :: MonadPush m => String -> m Unit
   push = pushString
   {-# INLINABLE push #-}
 
@@ -133,7 +135,7 @@ instance Marshal String where
   {-# INLINABLE pop #-}
 
 instance Marshal T.Text where
-  push :: MonadPush m => T.Text -> m ()
+  push :: MonadPush m => T.Text -> m Unit
   push = pushText
   {-# INLINABLE push #-}
 
@@ -142,7 +144,7 @@ instance Marshal T.Text where
   {-# INLINABLE pop #-}
 
 instance Marshal TL.Text where
-  push :: MonadPush m => TL.Text -> m ()
+  push :: MonadPush m => TL.Text -> m Unit
   push = push . TL.toStrict
   {-# INLINABLE push #-}
 
@@ -152,11 +154,11 @@ instance Marshal TL.Text where
 
 type GMarshal :: (Type -> Type) -> Constraint
 class GMarshal f where
-  gpush :: MonadPush m => f a -> m ()
+  gpush :: MonadPush m => f a -> m Unit
   gpop  :: MonadPop m => m (f a)
 
 instance Marshal a => GMarshal (K1 i a) where
-  gpush :: (Marshal a, MonadPush m) => K1 i a a1 -> m ()
+  gpush :: (Marshal a, MonadPush m) => K1 i a a1 -> m Unit
   gpush (K1 x) = push x
   {-# INLINABLE gpush #-}
 
@@ -165,7 +167,7 @@ instance Marshal a => GMarshal (K1 i a) where
   {-# INLINABLE gpop #-}
 
 instance (GMarshal f, GMarshal g) => GMarshal (f :*: g) where
-  gpush :: (GMarshal f, GMarshal g, MonadPush m) => (:*:) f g a -> m ()
+  gpush :: (GMarshal f, GMarshal g, MonadPush m) => (:*:) f g a -> m Unit
   gpush (a :*: b) = do
     gpush a
     gpush b
@@ -176,7 +178,7 @@ instance (GMarshal f, GMarshal g) => GMarshal (f :*: g) where
   {-# INLINABLE gpop #-}
 
 instance GMarshal a => GMarshal (M1 i c a) where
-  gpush :: (GMarshal a, MonadPush m) => M1 i c a a1 -> m ()
+  gpush :: (GMarshal a, MonadPush m) => M1 i c a a1 -> m Unit
   gpush (M1 x) = gpush x
   {-# INLINABLE gpush #-}
 
@@ -195,14 +197,14 @@ instance GMarshal a => GMarshal (M1 i c a) where
 --   consisting of only types that implement 'Marshal'.
 type SimpleProduct :: Type -> Constraint
 type family SimpleProduct a where
-  SimpleProduct a = (ProductLike a (Rep a), OnlyMarshallableFields (Rep a))
+  SimpleProduct a = CTuple2 (ProductLike a (Rep a)) (OnlyMarshallableFields (Rep a))
 
 type ProductLike :: Type -> (Type -> Type) -> Constraint
 type family ProductLike t f where
-  ProductLike t (a :*: b) = (ProductLike t a, ProductLike t b)
+  ProductLike t (a :*: b)  = CTuple2 (ProductLike t a) (ProductLike t b)
   ProductLike t (M1 _ _ a) = ProductLike t a
-  ProductLike _ (K1 _ _) = ()
-  ProductLike t (_ :+: _) =
+  ProductLike _ (K1 _ _)   = CUnit
+  ProductLike t (_ :+: _)  =
     TypeError ( 'Text "Error while deriving marshalling code for type " ':<>: 'ShowType t ':<>: 'Text ":"
               ':$$: 'Text "Cannot derive sum type, only product types are supported.")
   ProductLike t U1 =
@@ -214,14 +216,14 @@ type family ProductLike t f where
 
 type OnlyMarshallableFields :: (Type -> Type) -> Constraint
 type family OnlyMarshallableFields f where
-  OnlyMarshallableFields (a :*: b) = (OnlyMarshallableFields a, OnlyMarshallableFields b)
-  OnlyMarshallableFields (a :+: b) = (OnlyMarshallableFields a, OnlyMarshallableFields b)
+  OnlyMarshallableFields (a :*: b)  = CTuple2 (OnlyMarshallableFields a) (OnlyMarshallableFields b)
+  OnlyMarshallableFields (a :+: b)  = CTuple2 (OnlyMarshallableFields a) (OnlyMarshallableFields b)
   OnlyMarshallableFields (M1 _ _ a) = OnlyMarshallableFields a
-  OnlyMarshallableFields U1 = ()
-  OnlyMarshallableFields V1 = ()
-  OnlyMarshallableFields k = OnlyMarshallableField k
+  OnlyMarshallableFields U1         = CUnit
+  OnlyMarshallableFields V1         = CUnit
+  OnlyMarshallableFields k          = OnlyMarshallableField k
 
 type OnlyMarshallableField :: (Type -> Type) -> Constraint
 type family OnlyMarshallableField f where
   OnlyMarshallableField (M1 _ _ a) = OnlyMarshallableField a
-  OnlyMarshallableField (K1 _ a) = Marshal a
+  OnlyMarshallableField (K1 _ a)   = Marshal a

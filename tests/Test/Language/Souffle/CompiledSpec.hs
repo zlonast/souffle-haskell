@@ -3,7 +3,9 @@ module Test.Language.Souffle.CompiledSpec
   ) where
 
 import qualified Data.Array                as A
+import           Data.List                 (List)
 import           Data.Maybe                (fromJust, isJust)
+import           Data.Proxy                (Proxy)
 import qualified Data.Vector               as V
 
 import           GHC.Generics              (Generic)
@@ -22,14 +24,20 @@ data Reachable = Reachable String String
 
 instance Souffle.Program Path where
   type ProgramFacts Path = [Edge, Reachable]
+
+  programName :: Path -> String
   programName = const "path"
 
 instance Souffle.Fact Edge where
   type FactDirection Edge = Souffle.InputOutput
+
+  factName :: Proxy Edge -> String
   factName = const "edge"
 
 instance Souffle.Fact Reachable where
   type FactDirection Reachable = Souffle.Output
+
+  factName :: Proxy Reachable -> String
   factName = const "reachable"
 
 instance Souffle.Marshal Edge
@@ -40,6 +48,8 @@ data BadPath = BadPath
 
 instance Souffle.Program BadPath where
   type ProgramFacts BadPath = [Edge, Reachable]
+
+  programName :: BadPath -> String
   programName = const "bad_path"
 
 
@@ -110,7 +120,7 @@ spec = describe "Souffle API" $ parallel $ do
       edges <- Souffle.runSouffle Path $ \handle -> do
         let prog = fromJust handle
         Souffle.getFacts prog
-      edges `shouldBe` ([] :: [Edge])
+      edges `shouldBe` ([] :: List Edge)
 
   describe "addFact" $ parallel $
     it "adds a fact" $ do

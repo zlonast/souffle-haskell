@@ -6,9 +6,12 @@ import           Control.Arrow                (Arrow (..), returnA)
 import           Control.Category             (Category (..))
 import           Control.Monad.IO.Class       (MonadIO (..))
 
+import           Data.List                    (List)
 import           Data.Profunctor              (Profunctor (..))
+import           Data.Proxy                   (Proxy)
 
 import           GHC.Generics                 (Generic)
+import           GHC.Tuple                    (Tuple2, Unit)
 
 import           Language.Souffle.Analysis    (Analysis, execAnalysis, mkAnalysis)
 import qualified Language.Souffle.Interpreted as Souffle
@@ -27,30 +30,36 @@ data Reachable = Reachable String String
 
 instance Souffle.Program Path where
   type ProgramFacts Path = [Edge, Reachable]
+
+  programName :: Path -> String
   programName = const "path"
 
 instance Souffle.Fact Edge where
   type FactDirection Edge = Souffle.InputOutput
+
+  factName :: Proxy Edge -> String
   factName = const "edge"
 
 instance Souffle.Fact Reachable where
   type FactDirection Reachable = Souffle.Output
+
+  factName :: Proxy Reachable -> String
   factName = const "reachable"
 
 instance Souffle.Marshal Edge
 instance Souffle.Marshal Reachable
 
-data Results = Results [Reachable] [Edge]
+data Results = Results (List Reachable) (List Edge)
   deriving stock (Eq, Show)
 
 pathAnalysis :: Souffle.Handle Path
-             -> Analysis Souffle.SouffleM [Edge] [Reachable]
+             -> Analysis Souffle.SouffleM (List Edge) (List Reachable)
 pathAnalysis h =
   mkAnalysis (Souffle.addFacts h) (Souffle.run h) (Souffle.getFacts h)
 
 -- A little bit silly, but good enough to test different forms of application with
 pathAnalysis' :: Souffle.Handle Path
-             -> Analysis Souffle.SouffleM [Edge] [Edge]
+             -> Analysis Souffle.SouffleM (List Edge) (List Edge)
 pathAnalysis' h =
   mkAnalysis (Souffle.addFacts h) (Souffle.run h) (Souffle.getFacts h)
 
@@ -60,39 +69,41 @@ newtype StringFact = StringFact String
   deriving stock (Eq, Show, Generic)
 
 instance Souffle.Program RoundTrip where
-  type ProgramFacts RoundTrip = '[StringFact]
+  type ProgramFacts RoundTrip = [StringFact]
 
+  programName :: RoundTrip -> String
   programName = const "round_trip"
 
 instance Souffle.Fact StringFact where
   type FactDirection StringFact = Souffle.InputOutput
 
+  factName :: Proxy StringFact -> String
   factName = const "string_fact"
 
 instance Souffle.Marshal StringFact
 
 
 roundTripAnalysis :: Souffle.Handle RoundTrip
-                  -> Analysis Souffle.SouffleM [Reachable] [StringFact]
+                  -> Analysis Souffle.SouffleM (List Reachable) (List StringFact)
 roundTripAnalysis h =
   mkAnalysis addFacts (Souffle.run h) (Souffle.getFacts h)
   where
     addFacts rs = do
       Souffle.addFacts h $ map (\(Reachable a _) -> StringFact a) rs
 
-withSouffle :: Souffle.Program a => a -> (Souffle.Handle a -> Souffle.SouffleM ()) -> IO ()
+withSouffle :: Souffle.Program a => a -> (Souffle.Handle a -> Souffle.SouffleM Unit) -> IO Unit
 withSouffle prog f = Souffle.runSouffle prog $ \case
   Nothing -> error "Failed to load program"
   Just h -> f h
 
-edges :: [Edge]
+edges :: (List Edge)
 edges = [Edge "a" "b", Edge "b" "c", Edge "b" "d", Edge "d" "e"]
 
 spec :: Spec
 spec = describe "composing analyses" $ parallel $ do
   it "supports fmap" $ do
     withSouffle Path $ \h -> do
-      let analysis = pathAnalysis h
+      let analysis  = pathAnalysis h
           analysis' = fmap length analysis
       count <- execAnalysis analysis' edges
       liftIO $ count `shouldBe` 8
@@ -143,7 +154,7 @@ spec = describe "composing analyses" $ parallel $ do
 
   it "supports mempty" $ do
     withSouffle Path $ \_ -> do
-      let analysis :: Analysis Souffle.SouffleM [Edge] [Reachable]
+      let analysis :: Analysis Souffle.SouffleM (List Edge) (List Reachable)
           analysis = mempty
       rs <- execAnalysis analysis [Edge "a" "b", Edge "b" "c"]
       liftIO $ rs `shouldBe` []
@@ -161,7 +172,7 @@ spec = describe "composing analyses" $ parallel $ do
   describe "analysis used as a category" $ parallel $ do
     it "supports 'id'" $ do
       withSouffle Path $ \_ -> do
-        let analysis :: Analysis Souffle.SouffleM [Edge] [Edge]
+        let analysis :: Analysis Souffle.SouffleM (List Edge) (List Edge)
             analysis = id
         edges' <- execAnalysis analysis edges
         liftIO $ edges' `shouldBe` edges
@@ -196,7 +207,7 @@ spec = describe "composing analyses" $ parallel $ do
 
     it "supports 'first'" $ do
       withSouffle Path $ \_ -> do
-        let analysis :: Analysis Souffle.SouffleM (Int, Bool) (Int, Bool)
+        let analysis :: Analysis Souffle.SouffleM (Tuple2 Int Bool) (Tuple2 Int Bool)
             analysis = first (arr (+1))
             input = (41, True)
         result <- execAnalysis analysis input
@@ -204,7 +215,7 @@ spec = describe "composing analyses" $ parallel $ do
 
     it "supports 'second'" $ do
       withSouffle Path $ \_ -> do
-        let analysis :: Analysis Souffle.SouffleM (Bool, Int) (Bool, Int)
+        let analysis :: Analysis Souffle.SouffleM (Tuple2 Bool Int) (Tuple2 Bool Int)
             analysis = second (arr (+1))
             input = (True, 41)
         result <- execAnalysis analysis input
@@ -212,7 +223,7 @@ spec = describe "composing analyses" $ parallel $ do
 
     it "supports (***)" $ do
       withSouffle Path $ \_ -> do
-        let analysis :: Analysis Souffle.SouffleM (Bool, Int) (Bool, Int)
+        let analysis :: Analysis Souffle.SouffleM (Tuple2 Bool Int) (Tuple2 Bool Int)
             analysis = arr not *** arr (+1)
             input = (True, 41)
         result <- execAnalysis analysis input
@@ -220,7 +231,7 @@ spec = describe "composing analyses" $ parallel $ do
 
     it "supports (&&&)" $ do
       withSouffle Path $ \_ -> do
-        let analysis :: Analysis Souffle.SouffleM Int (Bool, Int)
+        let analysis :: Analysis Souffle.SouffleM Int (Tuple2 Bool Int)
             analysis = arr (== 1000) &&& arr (+1)
             input = 41
         result <- execAnalysis analysis input

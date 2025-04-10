@@ -20,6 +20,8 @@ import           Control.Monad    ((>=>))
 import           Data.Kind        (Type)
 import           Data.Profunctor  (Choice (..), Profunctor (..), Strong (..))
 
+import           GHC.Tuple        (Tuple2, Unit)
+
 import           Prelude          hiding (id, (.))
 
 -- | Data type used to compose multiple Datalog programs. Composition is mainly
@@ -33,12 +35,12 @@ import           Prelude          hiding (id, (.))
 --   types of the analysis.
 type Analysis :: (Type -> Type) -> Type -> Type -> Type
 data Analysis m a b
-  = Analysis (a -> m ()) (m ()) (a -> m b)
+  = Analysis (a -> m Unit) (m Unit) (a -> m b)
 type role Analysis representational representational nominal
 
 -- | Creates an 'Analysis' value.
-mkAnalysis :: (a -> m ()) -- ^ Function for finding facts used by the 'Analysis'.
-           -> m ()        -- ^ Function for actually running the 'Analysis'.
+mkAnalysis :: (a -> m Unit) -- ^ Function for finding facts used by the 'Analysis'.
+           -> m Unit        -- ^ Function for actually running the 'Analysis'.
            -> m b         -- ^ Function for retrieving the 'Analysis' results from Souffle.
            -> Analysis m a b
 mkAnalysis f r g = Analysis f r (const g)
@@ -65,29 +67,29 @@ instance Functor m => Profunctor (Analysis m) where
   rmap = fmap
   {-# INLINABLE rmap #-}
 
-instance (Monoid (m ()), Applicative m) => Applicative (Analysis m a) where
-  pure :: (Monoid (m ()), Applicative m) => a1 -> Analysis m a a1
+instance (Monoid (m Unit), Applicative m) => Applicative (Analysis m a) where
+  pure :: (Monoid (m Unit), Applicative m) => a1 -> Analysis m a a1
   pure a = Analysis mempty mempty (const $ pure a)
   {-# INLINABLE pure #-}
 
-  (<*>) :: (Monoid (m ()), Applicative m) => Analysis m a (a1 -> b) -> Analysis m a a1 -> Analysis m a b
+  (<*>) :: (Monoid (m Unit), Applicative m) => Analysis m a (a1 -> b) -> Analysis m a a1 -> Analysis m a b
   Analysis f1 r1 g1 <*> Analysis f2 r2 g2 =
     Analysis (f1 <> f2) (r1 <> r2) (\a -> g1 a <*> g2 a)
   {-# INLINABLE (<*>) #-}
 
-instance (Semigroup (m ()), Semigroup (m b)) => Semigroup (Analysis m a b) where
-  (<>) :: (Semigroup (m ()), Semigroup (m b)) => Analysis m a b -> Analysis m a b -> Analysis m a b
+instance (Semigroup (m Unit), Semigroup (m b)) => Semigroup (Analysis m a b) where
+  (<>) :: (Semigroup (m Unit), Semigroup (m b)) => Analysis m a b -> Analysis m a b -> Analysis m a b
   Analysis f1 r1 g1 <> Analysis f2 r2 g2 =
     Analysis (f1 <> f2) (r1 <> r2) (g1 <> g2)
   {-# INLINABLE (<>) #-}
 
-instance (Monoid (m ()), Monoid (m b)) => Monoid (Analysis m a b) where
-  mempty :: (Monoid (m ()), Monoid (m b)) => Analysis m a b
+instance (Monoid (m Unit), Monoid (m b)) => Monoid (Analysis m a b) where
+  mempty :: (Monoid (m Unit), Monoid (m b)) => Analysis m a b
   mempty = Analysis mempty mempty mempty
   {-# INLINABLE mempty #-}
 
-instance (Monoid (m ()), Monad m) => Category (Analysis m) where
-  id :: (Monoid (m ()), Monad m) => Analysis m a a
+instance (Monoid (m Unit), Monad m) => Category (Analysis m) where
+  id :: (Monoid (m Unit), Monad m) => Analysis m a a
   id = Analysis mempty mempty pure
   {-# INLINABLE id #-}
 
@@ -99,12 +101,12 @@ instance (Monoid (m ()), Monad m) => Category (Analysis m) where
   {-# INLINABLE (.) #-}
 
 instance Functor m => Strong (Analysis m) where
-  first' :: Functor m => Analysis m a b -> Analysis m (a, c) (b, c)
+  first' :: Functor m => Analysis m a b -> Analysis m (Tuple2 a c) (Tuple2 b c)
   first' (Analysis f r g) =
     Analysis (f . fst) r $ \(b, d) -> (,d) <$> g b
   {-# INLINABLE first' #-}
 
-  second' :: Functor m => Analysis m a b -> Analysis m (c, a) (c, b)
+  second' :: Functor m => Analysis m a b -> Analysis m (Tuple2 c a) (Tuple2 c b)
   second' (Analysis f r g) =
     Analysis (f . snd) r $ \(d, b) -> (d,) <$> g b
   {-# INLINABLE second' #-}
@@ -132,20 +134,20 @@ instance Applicative m => Choice (Analysis m) where
         Right b -> Right <$> g b
   {-# INLINABLE right' #-}
 
-instance (Monad m, Monoid (m ()), Category (Analysis m)) => Arrow (Analysis m) where
-  arr :: (Monad m, Monoid (m ()), Category (Analysis m)) => (b -> c) -> Analysis m b c
+instance (Monad m, Monoid (m Unit), Category (Analysis m)) => Arrow (Analysis m) where
+  arr :: (Monad m, Monoid (m Unit), Category (Analysis m)) => (b -> c) -> Analysis m b c
   arr f = Analysis mempty mempty (pure . f)
   {-# INLINABLE arr #-}
 
-  first :: (Monad m, Monoid (m ()), Category (Analysis m)) => Analysis m b c -> Analysis m (b, d) (c, d)
+  first :: (Monad m, Monoid (m Unit), Category (Analysis m)) => Analysis m b c -> Analysis m (Tuple2 b d) (Tuple2 c d)
   first = first'
   {-# INLINABLE first #-}
 
-  second :: (Monad m, Monoid (m ()), Category (Analysis m)) => Analysis m b c -> Analysis m (d, b) (d, c)
+  second :: (Monad m, Monoid (m Unit), Category (Analysis m)) => Analysis m b c -> Analysis m (Tuple2 d b) (Tuple2 d c)
   second = second'
   {-# INLINABLE second #-}
 
-  (***) :: (Monad m, Monoid (m ()), Category (Analysis m)) => Analysis m b c -> Analysis m b' c' -> Analysis m (b, b') (c, c')
+  (***) :: (Monad m, Monoid (m Unit), Category (Analysis m)) => Analysis m b c -> Analysis m b' c' -> Analysis m (Tuple2 b b') (Tuple2 c c')
   Analysis f1 r1 g1 *** Analysis f2 r2 g2 =
     Analysis (\(b, b') -> f1 b *> f2 b') (r1 <> r2) $ \(b, b') -> do
       c <- g1 b
@@ -153,21 +155,21 @@ instance (Monad m, Monoid (m ()), Category (Analysis m)) => Arrow (Analysis m) w
       pure (c, c')
   {-# INLINABLE (***) #-}
 
-  (&&&) :: (Monad m, Monoid (m ()), Category (Analysis m)) => Analysis m b c -> Analysis m b c' -> Analysis m b (c, c')
+  (&&&) :: (Monad m, Monoid (m Unit), Category (Analysis m)) => Analysis m b c -> Analysis m b c' -> Analysis m b (Tuple2 c c')
   Analysis f1 r1 g1 &&& Analysis f2 r2 g2 =
     Analysis (f1 <> f2) (r1 <> r2) $ \b -> (,) <$> g1 b <*> g2 b
   {-# INLINABLE (&&&) #-}
 
-instance (Monad m, Monoid (m ())) => ArrowChoice (Analysis m) where
-  left :: (Monad m, Monoid (m ())) => Analysis m b c -> Analysis m (Either b d) (Either c d)
+instance (Monad m, Monoid (m Unit)) => ArrowChoice (Analysis m) where
+  left :: (Monad m, Monoid (m Unit)) => Analysis m b c -> Analysis m (Either b d) (Either c d)
   left = left'
   {-# INLINABLE left #-}
 
-  right :: (Monad m, Monoid (m ())) => Analysis m b c -> Analysis m (Either d b) (Either d c)
+  right :: (Monad m, Monoid (m Unit)) => Analysis m b c -> Analysis m (Either d b) (Either d c)
   right = right'
   {-# INLINABLE right #-}
 
-  (+++) :: (Monad m, Monoid (m ())) => Analysis m b c -> Analysis m b' c' -> Analysis m (Either b b') (Either c c')
+  (+++) :: (Monad m, Monoid (m Unit)) => Analysis m b c -> Analysis m b' c' -> Analysis m (Either b b') (Either c c')
   Analysis f1 r1 g1 +++ Analysis f2 r2 g2 = Analysis f' (r1 <> r2) g'
     where
       f' = \case

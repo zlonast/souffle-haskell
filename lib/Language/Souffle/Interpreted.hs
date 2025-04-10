@@ -37,6 +37,7 @@ import           Data.Foldable              (traverse_)
 import           Data.Int                   (Int32)
 import           Data.IORef                 (IORef, modifyIORef', newIORef, readIORef, writeIORef)
 import           Data.Kind                  (Constraint, Type)
+import           Data.List                  (List)
 import qualified Data.List                  as List hiding (init)
 import           Data.Maybe                 (fromMaybe)
 import           Data.Proxy                 (Proxy (..))
@@ -44,6 +45,9 @@ import           Data.Semigroup             (Last (..))
 import qualified Data.Text                  as T
 import qualified Data.Vector                as V
 import           Data.Word                  (Word32, Word64)
+
+import           GHC.Classes                (CUnit)
+import           GHC.Tuple                  (Unit)
 
 import           Language.Souffle.Class     (ContainsInputFact, ContainsOutputFact, Direction (..), Fact (..),
                                              FactOptions (..), Marshal (..), MonadSouffle (..), Program (..),
@@ -199,29 +203,29 @@ data HandleData = HandleData
   }
 
 type IMarshal :: Type -> Type
-newtype IMarshal a = IMarshal (State [String] a)
-  deriving (Functor, Applicative, Monad, MonadState [String])
-  via (State [String])
+newtype IMarshal a = IMarshal (State (List String) a)
+  deriving (Functor, Applicative, Monad, MonadState (List String))
+  via (State (List String))
 type role IMarshal nominal
 
 instance MonadPush IMarshal where
-  pushInt32 :: Int32 -> IMarshal ()
+  pushInt32 :: Int32 -> IMarshal Unit
   pushInt32 int = modify (show int:)
   {-# INLINABLE pushInt32 #-}
 
-  pushUInt32 :: Word32 -> IMarshal ()
+  pushUInt32 :: Word32 -> IMarshal Unit
   pushUInt32 int = modify (show int:)
   {-# INLINABLE pushUInt32 #-}
 
-  pushFloat :: Float -> IMarshal ()
+  pushFloat :: Float -> IMarshal Unit
   pushFloat float = modify (show float:)
   {-# INLINABLE pushFloat #-}
 
-  pushString :: String -> IMarshal ()
+  pushString :: String -> IMarshal Unit
   pushString str = modify (str:)
   {-# INLINABLE pushString #-}
 
-  pushText :: T.Text -> IMarshal ()
+  pushText :: T.Text -> IMarshal Unit
   pushText txt = pushString (T.unpack txt)
   {-# INLINABLE pushText #-}
 
@@ -258,11 +262,11 @@ instance MonadPop IMarshal where
     pure $ T.pack str
   {-# INLINABLE popText #-}
 
-popMarshalT :: IMarshal a -> [String] -> a
+popMarshalT :: IMarshal a -> List String -> a
 popMarshalT (IMarshal m) = evalState m
 {-# INLINABLE popMarshalT #-}
 
-pushMarshalT :: IMarshal a -> [String]
+pushMarshalT :: IMarshal a -> List String
 pushMarshalT (IMarshal m) = reverse $ execState m []
 {-# INLINABLE pushMarshalT #-}
 
@@ -270,8 +274,8 @@ type Collect :: (Type -> Type) -> Constraint
 class Collect c where
   collect :: Marshal a => FilePath -> IO (c a)
 
-instance Collect [] where
-  collect :: Marshal a => FilePath -> IO [a]
+instance Collect List where
+  collect :: Marshal a => FilePath -> IO (List a)
   collect factFile = do
     factLines <- readCSVFile factFile
     let facts = map (popMarshalT pop) factLines
@@ -292,11 +296,11 @@ instance Collect (A.Array Int) where
   {-# INLINABLE collect #-}
 
 instance MonadSouffle SouffleM where
-  type Handler SouffleM = Handle
+  type Handler      SouffleM   = Handle
   type CollectFacts SouffleM c = Collect c
-  type SubmitFacts SouffleM _ = ()
+  type SubmitFacts  SouffleM _ = CUnit
 
-  run :: Handler SouffleM prog -> SouffleM ()
+  run :: Handler SouffleM prog -> SouffleM Unit
   run (Handle refHandleData refHandleStdOut refHandleStdErr) = liftIO $ do
     handle <- readIORef refHandleData
     -- Invoke the souffle binary using parameters, supposing that the facts
@@ -332,7 +336,7 @@ instance MonadSouffle SouffleM where
       )
   {-# INLINABLE run #-}
 
-  setNumThreads :: Handler SouffleM prog -> Word64 -> SouffleM ()
+  setNumThreads :: Handler SouffleM prog -> Word64 -> SouffleM Unit
   setNumThreads handle n = liftIO $
     modifyIORef' (handleData handle) (\h -> h { noOfThreads = n })
   {-# INLINABLE setNumThreads #-}
@@ -355,12 +359,12 @@ instance MonadSouffle SouffleM where
   findFact :: (Fact a, ContainsOutputFact prog a, Eq a)
            => Handle prog -> a -> SouffleM (Maybe a)
   findFact prog fact = do
-    facts :: [a] <- getFacts prog
+    facts :: List a <- getFacts prog
     pure $ List.find (== fact) facts
   {-# INLINABLE findFact #-}
 
   addFact :: forall a prog. (Fact a, ContainsInputFact prog a, Marshal a)
-          => Handle prog -> a -> SouffleM ()
+          => Handle prog -> a -> SouffleM Unit
   addFact h fact = liftIO $ do
     handle <- readIORef $ handleData h
     let relationName = factName (Proxy :: Proxy a)
@@ -370,7 +374,7 @@ instance MonadSouffle SouffleM where
   {-# INLINABLE addFact #-}
 
   addFacts :: forall a prog f. (Fact a, ContainsInputFact prog a, Marshal a, Foldable f)
-           => Handle prog -> f a -> SouffleM ()
+           => Handle prog -> f a -> SouffleM Unit
   addFacts h facts = liftIO $ do
     handle <- readIORef $ handleData h
     let relationName = factName (Proxy :: Proxy a)
@@ -400,7 +404,7 @@ locateSouffle = do
         _            -> pure Nothing
 {-# INLINABLE locateSouffle #-}
 
-readCSVFile :: FilePath -> IO [[String]]
+readCSVFile :: FilePath -> IO (List (List String))
 readCSVFile path = doesFileExist path >>= \case
   False -> pure []
   True -> do
@@ -417,7 +421,7 @@ souffleStdOut = liftIO . readIORef . stdoutResult
 souffleStdErr :: forall prog. Program prog => Handle prog -> SouffleM (Maybe T.Text)
 souffleStdErr = liftIO . readIORef . stderrResult
 
-splitOn :: Char -> String -> [String]
+splitOn :: Char -> String -> List String
 splitOn c s =
   let (x, rest) = break (== c) s
       rest' = drop 1 rest

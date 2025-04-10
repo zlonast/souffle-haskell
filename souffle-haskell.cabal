@@ -54,6 +54,7 @@ library
     OverloadedStrings
     TypeFamilies
     UndecidableInstances
+    NoListTuplePuns
   ghc-options: -Wall
   cxx-options: -std=c++17 -Wall
   include-dirs:
@@ -73,7 +74,8 @@ library
       profunctors >=5.6.2 && <6,
       temporary >=1.3 && <2,
       text >=2.0.2 && <3,
-      vector <=1.0
+      vector <=1.0,
+      ghc-prim
   default-language: GHC2024
   if os(linux)
     extra-libraries: stdc++
@@ -96,6 +98,7 @@ test-suite souffle-haskell-test
     OverloadedStrings
     TypeFamilies
     UndecidableInstances
+    NoListTuplePuns
   ghc-options: -Wall
   cxx-options: -std=c++17 -D__EMBEDDED_SOUFFLE__
   include-dirs:
@@ -116,7 +119,8 @@ test-suite souffle-haskell-test
       souffle-haskell,
       temporary >=1.3 && <2,
       text >=2.0.2 && <3,
-      vector <=1.0
+      vector <=1.0,
+      ghc-prim
   default-language: GHC2024
   if os(darwin)
     extra-libraries: c++
@@ -133,6 +137,7 @@ benchmark souffle-haskell-benchmarks
     OverloadedStrings
     TypeFamilies
     UndecidableInstances
+    NoListTuplePuns
   ghc-options: -Wall
   cxx-options: -std=c++17 -D__EMBEDDED_SOUFFLE__ -std=c++17 -march=native
   include-dirs:
@@ -145,7 +150,8 @@ benchmark souffle-haskell-benchmarks
       deepseq >=1.4.4 && <2,
       souffle-haskell,
       text >=2.0.2 && <3,
-      vector <=1.0
+      vector <=1.0,
+      ghc-prim
   default-language: GHC2024
   if os(darwin)
     extra-libraries: c++

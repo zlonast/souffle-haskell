@@ -38,14 +38,16 @@ import           Data.Foldable                    (traverse_)
 import           Data.Functor.Identity            (Identity (..))
 import           Data.Int                         (Int32)
 import           Data.Kind                        (Constraint, Type)
+import           Data.List                        (List)
 import           Data.Proxy                       (Proxy (..))
+import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Data.Text.Encoding               as TE
 import qualified Data.Text.Internal.StrictBuilder as TB
 import qualified Data.Text.Lazy                   as TL
 import qualified Data.Vector                      as V
 import qualified Data.Vector.Mutable              as MV
-import           Data.Word                        (Word32)
+import           Data.Word                        (Word32, Word64)
 
 import           Foreign                          (copyBytes)
 import           Foreign.ForeignPtr               (ForeignPtr, mallocForeignPtrBytes, newForeignPtr_, withForeignPtr)
@@ -54,6 +56,7 @@ import           Foreign.Ptr                      (Ptr, castPtr, nullPtr, plusPt
 import qualified Foreign.Storable                 as S
 
 import           GHC.Generics                     (Generic (..), K1, M1, type (:*:))
+import           GHC.Tuple                        (Unit)
 
 import           Language.Souffle.Class           (ContainsInputFact, ContainsOutputFact, Direction (..), Fact (..),
                                                    FactOptions (..), Marshal (..), MonadSouffle (..),
@@ -62,10 +65,10 @@ import qualified Language.Souffle.Internal        as Internal
 import           Language.Souffle.Marshal         (MonadPop (..), MonadPush (..))
 
 import           Prelude                          hiding (init)
-import Data.Word (Word64)
 
 type ByteCount :: Type
 type ByteCount = Int
+
 type ByteBuf :: Type
 type ByteBuf = Internal.ByteBuf
 
@@ -135,7 +138,7 @@ runMarshalFastM (CMarshalFast m) = evalStateT m
 ramDomainSize :: Int
 ramDomainSize = 4
 
-writeAsBytes :: (S.Storable a, Marshal a) => a -> CMarshalFast ()
+writeAsBytes :: (S.Storable a, Marshal a) => a -> CMarshalFast Unit
 writeAsBytes a = do
   ptr <- gets castPtr
   liftIO $ S.poke ptr a
@@ -151,23 +154,23 @@ readAsBytes = do
 {-# INLINABLE readAsBytes #-}
 
 instance MonadPush CMarshalFast where
-  pushInt32 :: Int32 -> CMarshalFast ()
+  pushInt32 :: Int32 -> CMarshalFast Unit
   pushInt32 = writeAsBytes
   {-# INLINABLE pushInt32 #-}
 
-  pushUInt32 :: Word32 -> CMarshalFast ()
+  pushUInt32 :: Word32 -> CMarshalFast Unit
   pushUInt32 = writeAsBytes
   {-# INLINABLE pushUInt32 #-}
 
-  pushFloat :: Float -> CMarshalFast ()
+  pushFloat :: Float -> CMarshalFast Unit
   pushFloat = writeAsBytes
   {-# INLINABLE pushFloat #-}
 
-  pushString :: String -> CMarshalFast ()
+  pushString :: String -> CMarshalFast Unit
   pushString str = pushText $ T.pack str
   {-# INLINABLE pushString #-}
 
-  pushText :: T.Text -> CMarshalFast ()
+  pushText :: T.Text -> CMarshalFast Unit
   pushText _ =
     error "Fast marshalling does not support serializing string-like values."
   {-# INLINABLE pushText #-}
@@ -230,7 +233,7 @@ runMarshalSlowM bufData byteCount (CMarshalSlow m) = do
   evalStateT m $ MarshalState bufData' ptr 0
 {-# INLINABLE runMarshalSlowM #-}
 
-resizeBufWhenNeeded :: ByteCount -> CMarshalSlow ()
+resizeBufWhenNeeded :: ByteCount -> CMarshalSlow Unit
 resizeBufWhenNeeded byteCount = do
   MarshalState bufData _ offset <- get
   let totalByteCount = bufSize bufData
@@ -248,7 +251,7 @@ allocateBuf byteCount = liftIO $
   mallocForeignPtrBytes byteCount
 {-# INLINABLE allocateBuf #-}
 
-copyBuf :: ForeignPtr ByteBuf -> ForeignPtr ByteBuf -> Int -> CMarshalSlow ()
+copyBuf :: ForeignPtr ByteBuf -> ForeignPtr ByteBuf -> Int -> CMarshalSlow Unit
 copyBuf dst src byteCount = liftIO $
   withForeignPtr src $ \srcPtr ->
   withForeignPtr dst $ \dstPtr ->
@@ -262,30 +265,30 @@ getNewTotalByteCount byteCount offset = go where
     | otherwise = totalByteCount
 {-# INLINABLE getNewTotalByteCount #-}
 
-incrementPtr :: ByteCount -> CMarshalSlow ()
+incrementPtr :: ByteCount -> CMarshalSlow Unit
 incrementPtr byteCount =
   modify $ \(MarshalState buf ptr offset) ->
     MarshalState buf (ptr `plusPtr` byteCount) (offset + byteCount)
 {-# INLINABLE incrementPtr #-}
 
 instance MonadPush CMarshalSlow where
-  pushInt32 :: Int32 -> CMarshalSlow ()
+  pushInt32 :: Int32 -> CMarshalSlow Unit
   pushInt32 = writeAsBytesSlow
   {-# INLINABLE pushInt32 #-}
 
-  pushUInt32 :: Word32 -> CMarshalSlow ()
+  pushUInt32 :: Word32 -> CMarshalSlow Unit
   pushUInt32 = writeAsBytesSlow
   {-# INLINABLE pushUInt32 #-}
 
-  pushFloat :: Float -> CMarshalSlow ()
+  pushFloat :: Float -> CMarshalSlow Unit
   pushFloat = writeAsBytesSlow
   {-# INLINABLE pushFloat #-}
 
-  pushString :: String -> CMarshalSlow ()
+  pushString :: String -> CMarshalSlow Unit
   pushString str = pushText $ T.pack str
   {-# INLINABLE pushString #-}
 
-  pushText :: T.Text -> CMarshalSlow ()
+  pushText :: Text -> CMarshalSlow Unit
   pushText txt = do
     let bs = TE.encodeUtf8 txt  -- TODO: is it possible to get rid of this copy?
         len = BS.length bs
@@ -299,7 +302,7 @@ instance MonadPush CMarshalSlow where
         incrementPtr len
   {-# INLINABLE pushText #-}
 
-writeAsBytesSlow :: (S.Storable a, Marshal a) => a -> CMarshalSlow ()
+writeAsBytesSlow :: (S.Storable a, Marshal a) => a -> CMarshalSlow Unit
 writeAsBytesSlow a = do
   resizeBufWhenNeeded ramDomainSize
   ptr <- gets (castPtr . _ptr)
@@ -312,8 +315,8 @@ type Collect :: (Type -> Type) -> Constraint
 class Collect c where
   collect :: Marshal a => Word32 -> CMarshalFast (c a)
 
-instance Collect [] where
-  collect :: Marshal a => Word32 -> CMarshalFast [a]
+instance Collect List where
+  collect :: Marshal a => Word32 -> CMarshalFast (List a)
   collect objCount = go objCount [] where
     go count acc
       | count == 0 = pure acc
@@ -359,15 +362,15 @@ type Submit :: Type -> Constraint
 type Submit a = ToByteSize (GetFields (Rep a))
 
 instance MonadSouffle SouffleM where
-  type Handler SouffleM = Handle
+  type Handler      SouffleM   = Handle
   type CollectFacts SouffleM c = Collect c
-  type SubmitFacts SouffleM a = Submit a
+  type SubmitFacts  SouffleM a = Submit a
 
-  run :: Handler SouffleM prog -> SouffleM ()
+  run :: Handler SouffleM prog -> SouffleM Unit
   run (Handle prog _) = SouffleM $ Internal.run prog
   {-# INLINABLE run #-}
 
-  setNumThreads :: Handler SouffleM prog -> Word64 -> SouffleM ()
+  setNumThreads :: Handler SouffleM prog -> Word64 -> SouffleM Unit
   setNumThreads (Handle prog _) numCores =
     SouffleM $ Internal.setNumThreads prog numCores
   {-# INLINABLE setNumThreads #-}
@@ -378,7 +381,7 @@ instance MonadSouffle SouffleM where
   {-# INLINABLE getNumThreads #-}
 
   addFact :: forall a prog. (Fact a, ContainsInputFact prog a, SubmitFacts SouffleM a, Show a)
-          => Handle prog -> a -> SouffleM ()
+          => Handle prog -> a -> SouffleM Unit
   addFact (Handle !prog !bufVar) !fact = liftIO $ do
     let relationName = factName (Proxy :: Proxy a)
     relation <- Internal.getRelation prog relationName
@@ -386,7 +389,7 @@ instance MonadSouffle SouffleM where
   {-# INLINABLE addFact #-}
 
   addFacts :: forall t a prog. (Foldable t, Fact a, ContainsInputFact prog a, Submit a)
-           => Handle prog -> t a -> SouffleM ()
+           => Handle prog -> t a -> SouffleM Unit
   addFacts (Handle prog bufVar) facts = liftIO $ do
     let relationName = factName (Proxy :: Proxy a)
     relation <- Internal.getRelation prog relationName
@@ -428,11 +431,11 @@ instance MonadSouffle SouffleM where
   {-# INLINABLE findFact #-}
 
 instance MonadSouffleFileIO SouffleM where
-  loadFiles :: Handler SouffleM prog -> FilePath -> SouffleM ()
+  loadFiles :: Handler SouffleM prog -> FilePath -> SouffleM Unit
   loadFiles (Handle prog _) = SouffleM . Internal.loadAll prog
   {-# INLINABLE loadFiles #-}
 
-  writeFiles :: Handler SouffleM prog -> FilePath -> SouffleM ()
+  writeFiles :: Handler SouffleM prog -> FilePath -> SouffleM Unit
   writeFiles (Handle prog _) = SouffleM . Internal.printAll prog
   {-# INLINABLE writeFiles #-}
 
@@ -487,45 +490,45 @@ instance ToByteSize TL.Text where
   toByteSize = const $ Estimated 36
   {-# INLINABLE toByteSize #-}
 
-instance ToByteSize '[] where
-  toByteSize :: Proxy '[] -> ByteSize
+instance ToByteSize [] where
+  toByteSize :: Proxy [] -> ByteSize
   toByteSize = const $ Exact 0
   {-# INLINABLE toByteSize #-}
 
-instance (ToByteSize a, ToByteSize as) => ToByteSize (a ': as) where
+instance (ToByteSize a, ToByteSize as) => ToByteSize (a : as) where
   toByteSize :: (ToByteSize a2, ToByteSize as) => Proxy (a2 : as) -> ByteSize
   toByteSize =
     const $ toByteSize (Proxy @a) <> toByteSize (Proxy @as)
   {-# INLINABLE toByteSize #-}
 
 -- | A helper type family, for getting all directly marshallable fields of a type.
-type GetFields :: k -> [Type]
+type GetFields :: k -> List Type
 type family GetFields a where
   GetFields (K1 _ a) = DoGetFields a
   GetFields (M1 _ _ a) = GetFields a
   GetFields (f :*: g) = GetFields f ++ GetFields g
 
-type DoGetFields :: Type -> [Type]
+type DoGetFields :: Type -> List Type
 type family DoGetFields a where
-  DoGetFields Int32 = '[Int32]
-  DoGetFields Word32 = '[Word32]
-  DoGetFields Float = '[Float]
-  DoGetFields String = '[String]
-  DoGetFields T.Text = '[T.Text]
-  DoGetFields TL.Text = '[TL.Text]
-  DoGetFields a = GetFields (Rep a)
+  DoGetFields Int32   = [Int32]
+  DoGetFields Word32  = [Word32]
+  DoGetFields Float   = [Float]
+  DoGetFields String  = [String]
+  DoGetFields T.Text  = [T.Text]
+  DoGetFields TL.Text = [TL.Text]
+  DoGetFields a       = GetFields (Rep a)
 
-type (++) :: [Type] -> [Type] -> [Type]
+type (++) :: List Type -> List Type -> List Type
 type family a ++ b where
-  '[] ++ b = b
-  (a ': as) ++ bs = a ': as ++ bs
+  [] ++ b = b
+  (a : as) ++ bs = a : as ++ bs
 
 estimateNumBytes :: forall a. Submit a => Proxy a -> ByteSize
 estimateNumBytes _ = toByteSize (Proxy @(GetFields (Rep a)))
 {-# INLINABLE estimateNumBytes #-}
 
 writeBytes :: forall f a. (Foldable f, Marshal a, Submit a)
-           => MVar BufData -> Ptr Internal.Relation -> f a -> IO ()
+           => MVar BufData -> Ptr Internal.Relation -> f a -> IO Unit
 writeBytes bufVar relation fa = case estimateNumBytes (Proxy @a) of
   Exact numBytes -> modifyMVarMasked_ bufVar $ \bufData -> do
     let totalByteCount = numBytes * objCount

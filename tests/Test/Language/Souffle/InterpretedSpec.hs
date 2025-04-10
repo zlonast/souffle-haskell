@@ -1,4 +1,3 @@
-
 module Test.Language.Souffle.InterpretedSpec
   ( module Test.Language.Souffle.InterpretedSpec
   ) where
@@ -6,7 +5,9 @@ module Test.Language.Souffle.InterpretedSpec
 import           Control.Monad.IO.Class       (liftIO)
 
 import qualified Data.Array                   as A
+import           Data.List                    (List)
 import           Data.Maybe                   (fromJust, isJust)
+import           Data.Proxy                   (Proxy)
 import qualified Data.Vector                  as V
 
 import           GHC.Generics                 (Generic)
@@ -17,7 +18,6 @@ import           System.Directory             (doesDirectoryExist, listDirectory
 import           System.IO.Temp               (createTempDirectory, getCanonicalTemporaryDirectory)
 
 import           Test.Hspec                   (Spec, describe, it, parallel, shouldBe, shouldNotBe)
-
 
 data Path = Path
 
@@ -33,25 +33,35 @@ data Reachable = Reachable String String
 
 instance Souffle.Fact Edge where
   type FactDirection Edge = Souffle.InputOutput
+
+  factName :: Proxy Edge -> String
   factName = const "edge"
 
 instance Souffle.Fact Reachable where
   type FactDirection Reachable = Souffle.Output
+
+  factName :: Proxy Reachable -> String
   factName = const "reachable"
 
 instance Souffle.Marshal Edge
 instance Souffle.Marshal Reachable
 
 instance Souffle.Program Path where
-  type ProgramFacts Path = '[Edge, Reachable]
+  type ProgramFacts Path = [Edge, Reachable]
+
+  programName :: Path -> String
   programName = const "path"
 
 instance Souffle.Program PathNoInput where
-  type ProgramFacts PathNoInput = '[Edge, Reachable]
+  type ProgramFacts PathNoInput = [Edge, Reachable]
+
+  programName :: PathNoInput -> String
   programName = const "path_no_input"
 
 instance Souffle.Program BadPath where
-  type ProgramFacts BadPath = '[Edge, Reachable]
+  type ProgramFacts BadPath = [Edge, Reachable]
+
+  programName :: BadPath -> String
   programName = const "bad_path"
 
 getTestTemporaryDirectory :: IO FilePath
@@ -103,7 +113,7 @@ spec = describe "Souffle API" $ parallel $ do
 
     it "returns no facts in case program hasn't run yet" $ do
       edges <- Souffle.runSouffle Path $ Souffle.getFacts . fromJust
-      edges `shouldBe` ([] :: [Edge])
+      edges `shouldBe` ([] :: List Edge)
 
     it "can retrieve facts from custom output directory" $ do
       cfg <- Souffle.defaultConfig

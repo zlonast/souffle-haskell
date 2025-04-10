@@ -8,7 +8,9 @@ import           Control.Monad                (join)
 import           Control.Monad.IO.Class       (liftIO)
 
 import           Data.Int                     (Int32)
+import           Data.List                    (List)
 import           Data.Maybe                   (fromJust)
+import           Data.Proxy                   (Proxy)
 import           Data.String                  (IsString)
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
@@ -17,6 +19,7 @@ import           Data.Void                    (Void)
 import           Data.Word                    (Word32)
 
 import           GHC.Generics                 (Generic)
+import           GHC.Tuple                    (Tuple3)
 
 import qualified Hedgehog.Gen                 as Gen
 import qualified Hedgehog.Range               as Range
@@ -28,6 +31,7 @@ import           Language.Souffle.Marshal     (Marshal)
 
 import           Test.Hspec                   (Spec, describe, it, parallel, shouldBe)
 import           Test.Hspec.Hedgehog          (PropertyT, forAll, hedgehog, (===))
+
 
 
 data Edge = Edge String String
@@ -117,34 +121,50 @@ newtype FloatFact = FloatFact Float
 
 instance Souffle.Fact StringFact where
   type FactDirection StringFact = Souffle.InputOutput
+
+  factName :: Proxy StringFact -> String
   factName = const "string_fact"
 
 instance Souffle.Fact TextFact where
   type FactDirection TextFact = Souffle.InputOutput
+
+  factName :: Proxy TextFact -> String
   factName = const "string_fact"
 
 instance Souffle.Fact LazyTextFact where
   type FactDirection LazyTextFact = Souffle.InputOutput
+
+  factName :: Proxy LazyTextFact -> String
   factName = const "string_fact"
 
 instance Souffle.Fact Int32Fact where
   type FactDirection Int32Fact = Souffle.InputOutput
+
+  factName :: Proxy Int32Fact -> String
   factName = const "number_fact"
 
 instance Souffle.Fact Word32Fact where
   type FactDirection Word32Fact = Souffle.InputOutput
+
+  factName :: Proxy Word32Fact -> String
   factName = const "unsigned_fact"
 
 instance Souffle.Fact FloatFact where
   type FactDirection FloatFact = Souffle.InputOutput
+
+  factName :: Proxy FloatFact -> String
   factName = const "float_fact"
 
 instance Souffle.Fact NestedNewtype where
   type FactDirection NestedNewtype = Souffle.InputOutput
+
+  factName :: Proxy NestedNewtype -> String
   factName = const "large_record"
 
 instance Souffle.Fact NestedRecord where
   type FactDirection NestedRecord = Souffle.InputOutput
+
+  factName :: Proxy NestedRecord -> String
   factName = const "large_record"
 
 instance Souffle.Marshal StringFact
@@ -157,6 +177,8 @@ instance Souffle.Marshal FloatFact
 instance Souffle.Program RoundTrip where
   type ProgramFacts RoundTrip =
     [StringFact, TextFact, LazyTextFact, Int32Fact, Word32Fact, FloatFact, NestedNewtype, NestedRecord]
+
+  programName :: RoundTrip -> String
   programName = const "round_trip"
 
 type RoundTripAction
@@ -192,6 +214,8 @@ instance Souffle.Program EdgeCases where
     , Unicode String, Unicode T.Text, Unicode TL.Text
     , NoStrings Void
     ]
+
+  programName :: EdgeCases -> String
   programName = const "edge_cases"
 
 instance Souffle.Fact (EmptyStrings String) where
@@ -238,6 +262,7 @@ instance Marshal (Unicode String)
 instance Marshal (Unicode T.Text)
 instance Marshal (Unicode TL.Text)
 instance Marshal (NoStrings a)
+
 
 
 spec :: Spec
@@ -331,19 +356,19 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
   let longString :: IsString a => a
       longString = "long_string_from_DL:...............................................................................................................................................................................................................................................................................................end"
 
-      getFactsI :: forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO [f a]
+      getFactsI :: forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO (List (f a))
       getFactsI = Interpreted.runSouffle EdgeCases $ \handle -> do
         let prog = fromJust handle
         Interpreted.run prog
         Interpreted.getFacts prog
-      getFactsC :: forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO [f a]
+      getFactsC :: forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO (List (f a))
       getFactsC = Compiled.runSouffle EdgeCases $ \handle -> do
         let prog = fromJust handle
         Compiled.run prog
         Prelude.reverse <$> Compiled.getFacts prog
 
       getUnicodeFactsI :: forall a. (IsString a, Eq a, Souffle.Fact (Unicode a), Souffle.ContainsOutputFact EdgeCases (Unicode a))
-                        => IO ([Unicode a], Maybe (Unicode a), Maybe (Unicode a))
+                        => IO (Tuple3 (List (Unicode a)) (Maybe (Unicode a)) (Maybe (Unicode a)))
       getUnicodeFactsI = Interpreted.runSouffle EdgeCases $ \handle -> do
         let prog = fromJust handle
         Interpreted.run prog
@@ -352,7 +377,7 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
               <*> Interpreted.findFact prog (Unicode "≂")  -- \x2242 iso \x2200
 
       getUnicodeFactsC :: forall a. (IsString a, Eq a, Souffle.Fact (Unicode a), Souffle.ContainsOutputFact EdgeCases (Unicode a), Compiled.Submit (Unicode a))
-                        => IO ([Unicode a], Maybe (Unicode a), Maybe (Unicode a))
+                        => IO (Tuple3 (List (Unicode a)) (Maybe (Unicode a)) (Maybe (Unicode a)))
       getUnicodeFactsC = Compiled.runSouffle EdgeCases $ \handle -> do
         let prog = fromJust handle
         Compiled.run prog
@@ -363,7 +388,7 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
       addAndGetFactsI :: Souffle.Fact (f a)
                       => Souffle.ContainsInputFact EdgeCases (f a)
                       => Souffle.ContainsOutputFact EdgeCases (f a)
-                      => [f a] -> IO [f a]
+                      => List (f a) -> IO (List (f a))
       addAndGetFactsI fs = Interpreted.runSouffle EdgeCases $ \handle -> do
         let prog = fromJust handle
         Interpreted.addFacts prog fs
@@ -373,7 +398,7 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
                       => Souffle.ContainsInputFact EdgeCases (f a)
                       => Souffle.ContainsOutputFact EdgeCases (f a)
                       => Compiled.Submit (f a)
-                      => [f a] -> IO [f a]
+                      => List (f a) -> IO (List (f a))
       addAndGetFactsC fs = Compiled.runSouffle EdgeCases $ \handle -> do
         let prog = fromJust handle
         Compiled.addFacts prog fs
@@ -381,26 +406,26 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
         Prelude.reverse <$> Compiled.getFacts prog
 
 
-      runTests :: (forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO [f a])
+      runTests :: (forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO (List (f a)))
                 -> (forall a. (IsString a, Eq a, Souffle.Fact (Unicode a), Souffle.ContainsOutputFact EdgeCases (Unicode a), Compiled.Submit (Unicode a))
-                    => IO ([Unicode a], Maybe (Unicode a), Maybe (Unicode a)))
+                    => IO (Tuple3 (List (Unicode a)) (Maybe (Unicode a)) (Maybe (Unicode a))))
                 -> (forall f a. Souffle.Fact (f a)
                     => Souffle.ContainsInputFact EdgeCases (f a)
                     => Souffle.ContainsOutputFact EdgeCases (f a)
                     => Compiled.Submit (f a)
-                    => [f a] -> IO [f a])
+                    => List (f a) -> IO (List (f a)))
                 -> Spec
       runTests getFacts getUnicodeFacts addAndGetFacts = do
         it "correctly marshals facts with number-like types" $ do
           facts <- getFacts
-          (facts :: [NoStrings Void])
+          (facts :: List (NoStrings Void))
             `shouldBe` [ NoStrings 42 (-100) 1.5
                        , NoStrings 123 (-456) 3.14
                        ]
 
         it "correctly marshals facts with empty Strings" $ do
           facts <- getFacts
-          (facts :: [EmptyStrings String])
+          (facts :: List (EmptyStrings String))
             `shouldBe` [ EmptyStrings "" "" 42
                        , EmptyStrings "" "abc" 42
                        , EmptyStrings "abc" "" 42
@@ -408,7 +433,7 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
 
         it "correctly marshals facts with empty Texts" $ do
           facts <- getFacts
-          (facts :: [EmptyStrings T.Text])
+          (facts :: List (EmptyStrings T.Text))
             `shouldBe` [ EmptyStrings "" "" 42
                         , EmptyStrings "" "abc" 42
                         , EmptyStrings "abc" "" 42
@@ -416,7 +441,7 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
 
         it "correctly marshals facts with empty lazy Texts" $ do
           facts <- getFacts
-          (facts :: [EmptyStrings TL.Text])
+          (facts :: List (EmptyStrings TL.Text))
             `shouldBe` [ EmptyStrings "" "" 42
                         , EmptyStrings "" "abc" 42
                         , EmptyStrings "abc" "" 42
@@ -424,15 +449,15 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
 
         it "correctly marshals facts really with long (>255 chars) String" $ do
           facts <- getFacts
-          (facts :: [LongStrings String]) `shouldBe` [ LongStrings longString ]
+          (facts :: List (LongStrings String)) `shouldBe` [ LongStrings longString ]
 
         it "correctly marshals facts really with long (>255 chars) Text" $ do
           facts <- getFacts
-          (facts :: [LongStrings T.Text]) `shouldBe` [ LongStrings longString ]
+          (facts :: List (LongStrings T.Text)) `shouldBe` [ LongStrings longString ]
 
         it "correctly marshals facts really with long (>255 chars) lazy Text" $ do
           facts <- getFacts
-          (facts :: [LongStrings TL.Text]) `shouldBe` [ LongStrings longString ]
+          (facts :: List (LongStrings TL.Text)) `shouldBe` [ LongStrings longString ]
 
         it "correctly marshals facts containing unicode characters (String)" $ do
           results <- getUnicodeFacts
@@ -459,61 +484,61 @@ edgeCaseSpecs = describe "edge cases" $ parallel $ do
             )
 
         it "correctly marshals empty strings back and forth (Strings)" $ do
-          let facts :: [EmptyStrings String]
+          let facts :: List (EmptyStrings String)
               facts = [EmptyStrings "" "" 1, EmptyStrings "" "" 42, EmptyStrings "" "abc" 2, EmptyStrings "" "abc" 42, EmptyStrings "abc" "" 3, EmptyStrings "abc" "" 42]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals empty strings back and forth (Text)" $ do
-          let facts :: [EmptyStrings T.Text]
+          let facts :: List (EmptyStrings T.Text)
               facts = [EmptyStrings "" "" 1, EmptyStrings "" "" 42, EmptyStrings "" "abc" 2, EmptyStrings "" "abc" 42, EmptyStrings "abc" "" 3, EmptyStrings "abc" "" 42]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals empty strings back and forth (lazy Text)" $ do
-          let facts :: [EmptyStrings TL.Text]
+          let facts :: List (EmptyStrings TL.Text)
               facts = [EmptyStrings "" "" 1, EmptyStrings "" "" 42, EmptyStrings "" "abc" 2, EmptyStrings "" "abc" 42, EmptyStrings "abc" "" 3, EmptyStrings "abc" "" 42]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals unicode back and forth (Strings)" $ do
-          let facts :: [Unicode String]
+          let facts :: List (Unicode String)
               facts = [Unicode "∀", Unicode "∀∀", Unicode "≂", Unicode "⌀", Unicode "⌀⌀"]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals unicode back and forth (Text)" $ do
-          let facts :: [Unicode T.Text]
+          let facts :: List (Unicode T.Text)
               facts = [Unicode "∀", Unicode "∀∀", Unicode "≂", Unicode "⌀", Unicode "⌀⌀"]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals unicode back and forth (lazy Text)" $ do
-          let facts :: [Unicode TL.Text]
+          let facts :: List (Unicode TL.Text)
               facts = [Unicode "∀", Unicode "∀∀", Unicode "≂", Unicode "⌀", Unicode "⌀⌀"]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals really long strings back and forth (Strings)" $ do
-          let facts :: [LongStrings String]
+          let facts :: List (LongStrings String)
               facts = [LongStrings longString, LongStrings $ join $ Prelude.replicate 10000 "abc"]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals really long strings back and forth (Text)" $ do
-          let facts :: [LongStrings T.Text]
+          let facts :: List (LongStrings T.Text)
               facts = [LongStrings longString, LongStrings $ T.pack $ join $ Prelude.replicate 10000 "abc"]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals really long strings back and forth (lazy Text)" $ do
-          let facts :: [LongStrings TL.Text]
+          let facts :: List (LongStrings TL.Text)
               facts = [LongStrings longString, LongStrings $ TL.pack $ join $ Prelude.replicate 10000 "abc"]
           facts' <- addAndGetFacts facts
           facts' `shouldBe` facts
 
         it "correctly marshals facts with number-like types" $ do
-          let facts :: [NoStrings Void]
+          let facts :: List (NoStrings Void)
               facts = [ NoStrings 42 (-100) 1.5
                       , NoStrings 123 (-456) 3.14
                       , NoStrings 789 (-789) 1000.123

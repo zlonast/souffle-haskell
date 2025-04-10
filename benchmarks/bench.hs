@@ -7,12 +7,14 @@ import           Control.Monad.IO.Class    (MonadIO (..))
 import           Criterion.Main            (Benchmark, bench, bgroup, defaultMain, nfIO)
 
 import           Data.Int                  (Int32)
+import           Data.List                 (List)
 import           Data.Proxy                (Proxy)
 import qualified Data.Text                 as T
 import qualified Data.Vector               as V
 import           Data.Word                 (Word32)
 
 import           GHC.Generics              (Generic)
+import           GHC.Tuple                 (Unit)
 
 import qualified Language.Souffle.Compiled as S
 
@@ -40,8 +42,7 @@ data FromDatalogStringFact
   deriving anyclass (NFData)
 
 instance S.Program Benchmarks where
-  type ProgramFacts Benchmarks =
-      '[NumbersFact, StringsFact, FromDatalogFact, FromDatalogStringFact]
+  type ProgramFacts Benchmarks = [NumbersFact, StringsFact, FromDatalogFact, FromDatalogStringFact]
 
   programName :: Benchmarks -> String
   programName = const "bench"
@@ -76,13 +77,13 @@ instance S.Marshal FromDatalogFact
 instance S.Marshal FromDatalogStringFact
 
 -- TODO: fix cases with larger numbers (crashes due to large memory allocations?)
-main :: IO ()
+main :: IO Unit
 main = defaultMain
      $ roundTripBenchmarks
     ++ serializationBenchmarks
     ++ deserializationBenchmarks
 
-roundTripBenchmarks :: [Benchmark]
+roundTripBenchmarks :: List Benchmark
 roundTripBenchmarks =
   [ bgroup "round trip facts (without strings)"
     [ bench "1"      $ nfIO $ roundTrip $ mkVec 1
@@ -125,7 +126,7 @@ roundTrip vec = S.runSouffle Benchmarks $ \case
     S.getFacts prog
 
 
-serializeNumbers :: Int -> IO ()
+serializeNumbers :: Int -> IO Unit
 serializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
   Nothing -> liftIO $ putStrLn "Failed to load serialize benchmarks!"
   Just prog ->
@@ -133,7 +134,7 @@ serializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
     -- No run needed
   where vec = V.generate 100 $ \i -> NumbersFact (fromIntegral i) (-42) 3.14
 
-deserializeNumbers :: Int -> IO ()
+deserializeNumbers :: Int -> IO Unit
 deserializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
   Nothing -> liftIO $ putStrLn "Failed to load deserialize benchmarks!"
   Just prog -> do
@@ -142,7 +143,7 @@ deserializeNumbers iterationCount = S.runSouffle Benchmarks $ \case
       fs <- S.getFacts prog
       pure (fs :: V.Vector FromDatalogFact)
 
-serializeWithStrings :: Int -> IO ()
+serializeWithStrings :: Int -> IO Unit
 serializeWithStrings iterationCount = S.runSouffle Benchmarks $ \case
   Nothing -> liftIO $ putStrLn "Failed to load serialize benchmarks!"
   Just prog ->
@@ -150,7 +151,7 @@ serializeWithStrings iterationCount = S.runSouffle Benchmarks $ \case
     -- No run needed
   where vec = V.generate 100 $ \i -> StringsFact (fromIntegral i) "abcdef" (-42) 3.14
 
-deserializeWithStrings :: Int -> IO ()
+deserializeWithStrings :: Int -> IO Unit
 deserializeWithStrings iterationCount = S.runSouffle Benchmarks $ \case
   Nothing -> liftIO $ putStrLn "Failed to load deserialize benchmarks!"
   Just prog -> do
@@ -159,7 +160,7 @@ deserializeWithStrings iterationCount = S.runSouffle Benchmarks $ \case
       fs <- S.getFacts prog
       pure (fs :: V.Vector FromDatalogStringFact)
 
-serializationBenchmarks :: [Benchmark]
+serializationBenchmarks :: List Benchmark
 serializationBenchmarks =
   [ bgroup "serializing facts (without strings)"
     [ bench "1"      $ nfIO $ serializeNumbers 1
@@ -177,7 +178,7 @@ serializationBenchmarks =
     ]
   ]
 
-deserializationBenchmarks :: [Benchmark]
+deserializationBenchmarks :: List Benchmark
 deserializationBenchmarks =
   [ bgroup "deserializing facts (without strings)"
     [ bench "1"      $ nfIO $ deserializeNumbers 1

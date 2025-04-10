@@ -32,6 +32,8 @@ import           Foreign.C.Types                    (CBool (..), CSize (..))
 import           Foreign.ForeignPtr                 (ForeignPtr, newForeignPtr, withForeignPtr)
 import           Foreign.Ptr                        (Ptr, nullPtr)
 
+import           GHC.Tuple                          (Unit)
+
 import           Language.Souffle.Internal.Bindings (ByteBuf, Relation, Souffle)
 import qualified Language.Souffle.Internal.Bindings as Bindings
 
@@ -56,7 +58,7 @@ init prog = mask_ $ do
 {-# INLINABLE init #-}
 
 -- | Sets the number of CPU cores this Souffle program should use.
-setNumThreads :: ForeignPtr Souffle -> Word64 -> IO ()
+setNumThreads :: ForeignPtr Souffle -> Word64 -> IO Unit
 setNumThreads prog numThreads = withForeignPtr prog $ \ptr ->
     Bindings.setNumThreads ptr $ CSize numThreads
 {-# INLINABLE setNumThreads #-}
@@ -69,18 +71,18 @@ getNumThreads prog = withForeignPtr prog $ \ptr -> do
 {-# INLINABLE getNumThreads #-}
 
 -- | Runs the Souffle program.
-run :: ForeignPtr Souffle -> IO ()
+run :: ForeignPtr Souffle -> IO Unit
 run prog = withForeignPtr prog Bindings.run
 {-# INLINABLE run #-}
 
 -- | Load all facts from files in a certain directory.
-loadAll :: ForeignPtr Souffle -> FilePath -> IO ()
+loadAll :: ForeignPtr Souffle -> FilePath -> IO Unit
 loadAll prog inputDir = withForeignPtr prog $ withCString inputDir . Bindings.loadAll
 {-# INLINABLE loadAll #-}
 
 -- | Write out all facts of the program to CSV files in a certain directory
 --   (as defined in the Souffle program).
-printAll :: ForeignPtr Souffle -> FilePath -> IO ()
+printAll :: ForeignPtr Souffle -> FilePath -> IO Unit
 printAll prog outputDir = withForeignPtr prog $ withCString outputDir . Bindings.printAll
 {-# INLINABLE printAll #-}
 
@@ -101,7 +103,7 @@ getRelation prog relation = withForeignPtr prog $ \ptr ->
     Passing in a different count of objects to what is actually inside the
     byte buffer will crash.
 -}
-pushFacts :: Ptr Relation -> Ptr ByteBuf -> Word64 -> IO ()
+pushFacts :: Ptr Relation -> Ptr ByteBuf -> Word64 -> IO Unit
 pushFacts relation buf x =
   Bindings.pushByteBuf relation buf (CSize x)
 {-# INLINABLE pushFacts #-}

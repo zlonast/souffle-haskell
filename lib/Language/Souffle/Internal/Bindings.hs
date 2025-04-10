@@ -24,6 +24,8 @@ import           Foreign.C.String (CString)
 import           Foreign.C.Types  (CBool (..), CSize (..))
 import           Foreign.Ptr      (FunPtr, Ptr)
 
+import           GHC.Tuple        (Unit)
+
 import           Prelude          hiding (init)
 
 
@@ -59,7 +61,7 @@ foreign import ccall unsafe "souffle_init" init
     undefined behavior (in C++).
 -}
 foreign import ccall unsafe "&souffle_free" free
-  :: FunPtr (Ptr Souffle -> IO ())
+  :: FunPtr (Ptr Souffle -> IO Unit)
 
 {-| Sets the number of CPU cores this Souffle program should use.
 
@@ -68,7 +70,7 @@ foreign import ccall unsafe "&souffle_free" free
     undefined behavior (in C++).
 -}
 foreign import ccall unsafe "souffle_set_num_threads" setNumThreads
-  :: Ptr Souffle -> CSize -> IO ()
+  :: Ptr Souffle -> CSize -> IO Unit
 
 {-| Gets the number of CPU cores this Souffle program should use.
 
@@ -84,7 +86,7 @@ foreign import ccall unsafe "souffle_get_num_threads" getNumThreads
     it to this function. Not doing so results in undefined behavior (in C++).
 -}
 foreign import ccall unsafe "souffle_run" run
-  :: Ptr Souffle -> IO ()
+  :: Ptr Souffle -> IO Unit
 
 {-| Load all facts from files in a certain directory.
 
@@ -92,7 +94,7 @@ foreign import ccall unsafe "souffle_run" run
     it to this function. Not doing so results in undefined behavior (in C++).
 -}
 foreign import ccall unsafe "souffle_load_all" loadAll
-  :: Ptr Souffle -> CString -> IO ()
+  :: Ptr Souffle -> CString -> IO Unit
 
 {-| Write out all facts of the program to CSV files in a given directory
     (as defined in the Souffle program).
@@ -101,7 +103,7 @@ foreign import ccall unsafe "souffle_load_all" loadAll
     to this function. Not doing so results in undefined behavior (in C++).
 -}
 foreign import ccall unsafe "souffle_print_all" printAll
-  :: Ptr Souffle -> CString -> IO ()
+  :: Ptr Souffle -> CString -> IO Unit
 
 {-| Lookup a relation in the Souffle program.
 
@@ -132,7 +134,7 @@ foreign import ccall unsafe "souffle_contains_tuple" containsTuple
     byte buffer will crash.
 -}
 foreign import ccall unsafe "souffle_tuple_push_many" pushByteBuf
-  :: Ptr Relation -> Ptr ByteBuf -> CSize -> IO ()
+  :: Ptr Relation -> Ptr ByteBuf -> CSize -> IO Unit
 
 {-| Serializes many Datalog facts from Datalog to Haskell
 
