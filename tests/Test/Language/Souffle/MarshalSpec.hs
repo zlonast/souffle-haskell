@@ -386,57 +386,6 @@ roundTripSpecs = describe "data transfer between Haskell and Souffle" $ parallel
       Compiled.run prog
       Prelude.head <$> Compiled.getFacts prog
 
-getFactsI :: forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO (List (f a))
-getFactsI = Interpreted.runSouffle EdgeCases $ \handle -> do
-  let prog = fromJust handle
-  Interpreted.run prog
-  Interpreted.getFacts prog
-
-getFactsC :: forall f a. (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO (List (f a))
-getFactsC = Compiled.runSouffle EdgeCases $ \handle -> do
-  let prog = fromJust handle
-  Compiled.run prog
-  Prelude.reverse <$> Compiled.getFacts prog
-
-getUnicodeFactsI :: forall a. (IsString a, Eq a, Souffle.Fact (Unicode a), Souffle.ContainsOutputFact EdgeCases (Unicode a))
-                  => IO $ Tuple3 (List $ Unicode a) (Maybe $ Unicode a) (Maybe $ Unicode a)
-getUnicodeFactsI = Interpreted.runSouffle EdgeCases $ \handle -> do
-  let prog = fromJust handle
-  Interpreted.run prog
-  (,,) <$> Interpreted.getFacts prog
-        <*> Interpreted.findFact prog (Unicode "⌀")  -- \x2300 iso \x2200
-        <*> Interpreted.findFact prog (Unicode "≂")  -- \x2242 iso \x2200
-
-getUnicodeFactsC :: forall a. (IsString a, Eq a, Souffle.Fact (Unicode a), Souffle.ContainsOutputFact EdgeCases (Unicode a), Compiled.Submit (Unicode a))
-                  => IO $ Tuple3 (List $ Unicode a) (Maybe $ Unicode a) (Maybe $ Unicode a)
-getUnicodeFactsC = Compiled.runSouffle EdgeCases $ \handle -> do
-  let prog = fromJust handle
-  Compiled.run prog
-  (,,) <$> (Prelude.reverse <$> Compiled.getFacts prog)
-        <*> Compiled.findFact prog (Unicode "⌀")  -- \x2300 iso \x2200
-        <*> Compiled.findFact prog (Unicode "≂")  -- \x2242 iso \x2200
-
-addAndGetFactsI :: Souffle.Fact (f a)
-                => Souffle.ContainsInputFact EdgeCases (f a)
-                => Souffle.ContainsOutputFact EdgeCases (f a)
-                => List (f a) -> IO (List (f a))
-addAndGetFactsI fs = Interpreted.runSouffle EdgeCases $ \handle -> do
-  let prog = fromJust handle
-  Interpreted.addFacts prog fs
-  Interpreted.run prog
-  Interpreted.getFacts prog
-
-addAndGetFactsC :: Souffle.Fact (f a)
-                => Souffle.ContainsInputFact EdgeCases (f a)
-                => Souffle.ContainsOutputFact EdgeCases (f a)
-                => Compiled.Submit (f a)
-                => List (f a) -> IO (List (f a))
-addAndGetFactsC fs = Compiled.runSouffle EdgeCases $ \handle -> do
-  let prog = fromJust handle
-  Compiled.addFacts prog fs
-  Compiled.run prog
-  Prelude.reverse <$> Compiled.getFacts prog
-
 factsTest :: IsString a => List (EmptyStrings a)
 factsTest = [EmptyStrings "" "" 42, EmptyStrings "" "abc" 42, EmptyStrings "abc" "" 42]
 
@@ -452,16 +401,13 @@ factsUnicodeTest = [Unicode "∀", Unicode "∀∀", Unicode "≂", Unicode "⌀
 longString :: IsString a => a
 longString = "long_string_from_DL:...............................................................................................................................................................................................................................................................................................end"
 
-runTests :: (forall {k} f (a :: k) . (Souffle.Fact (f a), Souffle.ContainsOutputFact EdgeCases (f a)) => IO (List (f a)))
-            -> (forall a. (IsString a, Eq a, Souffle.Fact (Unicode a), Souffle.ContainsOutputFact EdgeCases (Unicode a), Compiled.Submit (Unicode a))
-                =>  IO $ Tuple3 (List $ Unicode a) (Maybe $ Unicode a) (Maybe $ Unicode a))
-            -> (forall {k} f (a :: k). Souffle.Fact (f a)
-                => Souffle.ContainsInputFact EdgeCases (f a)
-                => Souffle.ContainsOutputFact EdgeCases (f a)
-                => Compiled.Submit (f a)
-                => List (f a) -> IO (List (f a)))
-            -> Spec
-runTests getFacts getUnicodeFacts addAndGetFacts = do
+runGetFacts
+  :: ( forall {k} f (a :: k) . 
+     ( Souffle.Fact (f a)
+     , Souffle.ContainsOutputFact EdgeCases (f a))
+  => IO (List (f a)))
+  -> Spec
+runGetFacts getFacts = do
   it "correctly marshals facts with number-like types" $ do
     facts <- getFacts @NoStrings @Void
     facts
@@ -492,6 +438,16 @@ runTests getFacts getUnicodeFacts addAndGetFacts = do
     facts <- getFacts @LongStrings @TL.Text
     facts `shouldBe` [ LongStrings longString ]
 
+runGetUnicodeFacts
+  :: ( forall a. 
+     ( IsString a
+     , Eq a
+     , Souffle.Fact (Unicode a)
+     , Souffle.ContainsOutputFact EdgeCases (Unicode a)
+     , Compiled.Submit (Unicode a))
+  => IO $ Tuple3 (List $ Unicode a) (Maybe $ Unicode a) (Maybe $ Unicode a))
+  -> Spec
+runGetUnicodeFacts getUnicodeFacts = do
   it "correctly marshals facts containing unicode characters (String)" $ do
     results <- getUnicodeFacts @String
     results `shouldBe` unicodeTest
@@ -503,7 +459,15 @@ runTests getFacts getUnicodeFacts addAndGetFacts = do
   it "correctly marshals facts containing unicode characters (lazy Text)" $ do
     results <- getUnicodeFacts @TL.Text
     results `shouldBe` unicodeTest
-  
+
+runAddAndGetFacts
+  :: ( forall {k} f (a :: k). Souffle.Fact (f a)
+  => Souffle.ContainsInputFact EdgeCases (f a)
+  => Souffle.ContainsOutputFact EdgeCases (f a)
+  => Compiled.Submit (f a)
+  => List (f a) -> IO (List (f a)))
+  -> Spec
+runAddAndGetFacts addAndGetFacts = do
   it "correctly marshals empty strings back and forth (Strings)" $ do
     facts <- addAndGetFacts @EmptyStrings @String factsAddTest 
     facts `shouldBe` factsAddTest
@@ -529,35 +493,67 @@ runTests getFacts getUnicodeFacts addAndGetFacts = do
     facts `shouldBe` factsUnicodeTest
 
   it "correctly marshals really long strings back and forth (Strings)" $ do
-    let facts = [LongStrings longString, LongStrings $ join $ Prelude.replicate 10000 "abc"]
-    facts' <- addAndGetFacts @LongStrings @String facts
-    facts' `shouldBe` facts
+    let factsData = [LongStrings longString, LongStrings $ join $ Prelude.replicate 10000 "abc"]
+    facts <- addAndGetFacts @LongStrings @String factsData
+    facts `shouldBe` factsData
 
   it "correctly marshals really long strings back and forth (Text)" $ do
-    let facts = [LongStrings longString, LongStrings $ T.pack $ join $ Prelude.replicate 10000 "abc"]
-    facts' <- addAndGetFacts @LongStrings @T.Text facts
-    facts' `shouldBe` facts
+    let factsData = [LongStrings longString, LongStrings $ T.pack $ join $ Prelude.replicate 10000 "abc"]
+    facts <- addAndGetFacts @LongStrings @T.Text factsData
+    facts `shouldBe` factsData
 
   it "correctly marshals really long strings back and forth (lazy Text)" $ do
-    let facts = [LongStrings longString, LongStrings $ TL.pack $ join $ Prelude.replicate 10000 "abc"]
-    facts' <- addAndGetFacts @LongStrings @TL.Text facts
-    facts' `shouldBe` facts
+    let factsData = [LongStrings longString, LongStrings $ TL.pack $ join $ Prelude.replicate 10000 "abc"]
+    facts <- addAndGetFacts @LongStrings @TL.Text factsData
+    facts `shouldBe` factsData
 
   it "correctly marshals facts with number-like types" $ do
-    let facts :: List (NoStrings Void)
-        facts = [ NoStrings 42 (-100) 1.5
-                , NoStrings 123 (-456) 3.14
-                , NoStrings 789 (-789) 1000.123
-                , NoStrings 0x12345678 (-1000) 1234.56789
-                ]
-    facts' <- addAndGetFacts @NoStrings @Void facts
-    facts' `shouldBe` facts
+    let factsData =
+          [ NoStrings 42 (-100) 1.5
+          , NoStrings 123 (-456) 3.14
+          , NoStrings 789 (-789) 1000.123
+          , NoStrings 0x12345678 (-1000) 1234.56789
+          ]
+    facts <- addAndGetFacts @NoStrings @Void factsData
+    facts `shouldBe` factsData
 
 edgeCaseSpecs :: Spec
 edgeCaseSpecs = describe "edge cases" $ parallel $ do
 
   describe "interpreted mode" $ parallel $ do
-    runTests getFactsI getUnicodeFactsI addAndGetFactsI
+    runGetFacts $ Interpreted.runSouffle EdgeCases $ \handle -> do
+      let prog = fromJust handle
+      Interpreted.run prog
+      Interpreted.getFacts prog
+
+    runGetUnicodeFacts $ Interpreted.runSouffle EdgeCases $ \handle -> do
+      let prog = fromJust handle
+      Interpreted.run prog
+      (,,) <$> Interpreted.getFacts prog
+            <*> Interpreted.findFact prog (Unicode "⌀")  -- \x2300 iso \x2200
+            <*> Interpreted.findFact prog (Unicode "≂")  -- \x2242 iso \x2200
+
+    runAddAndGetFacts $ \fs -> Interpreted.runSouffle EdgeCases $ \handle -> do
+      let prog = fromJust handle
+      Interpreted.addFacts prog fs
+      Interpreted.run prog
+      Interpreted.getFacts prog
 
   describe "compiled mode" $ parallel $ do
-    runTests getFactsC getUnicodeFactsC addAndGetFactsC
+    runGetFacts $ Compiled.runSouffle EdgeCases $ \handle -> do
+      let prog = fromJust handle
+      Compiled.run prog
+      Prelude.reverse <$> Compiled.getFacts prog
+
+    runGetUnicodeFacts $ Compiled.runSouffle EdgeCases $ \handle -> do
+      let prog = fromJust handle
+      Compiled.run prog
+      (,,) <$> (Prelude.reverse <$> Compiled.getFacts prog)
+            <*> Compiled.findFact prog (Unicode "⌀")  -- \x2300 iso \x2200
+            <*> Compiled.findFact prog (Unicode "≂")  -- \x2242 iso \x2200
+
+    runAddAndGetFacts $ \fs -> Compiled.runSouffle EdgeCases $ \handle -> do
+      let prog = fromJust handle
+      Compiled.addFacts prog fs
+      Compiled.run prog
+      Prelude.reverse <$> Compiled.getFacts prog
