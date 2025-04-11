@@ -512,11 +512,6 @@ instance ToByteSize [] where
   toByteSize = Exact 0
   {-# INLINABLE toByteSize #-}
 
-instance ToByteSize List where
-  toByteSize :: ByteSize
-  toByteSize = Exact 0
-  {-# INLINABLE toByteSize #-}
-
 instance (ToByteSize a, ToByteSize as) => ToByteSize @(List Type) (a : as) where
   toByteSize :: ByteSize
   toByteSize = toByteSize @Type @a <> toByteSize @(List Type) @as
